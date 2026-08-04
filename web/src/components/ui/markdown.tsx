@@ -602,8 +602,21 @@ function renderSequenceDiagram(source: string): string {
   `
 }
 
+/**
+ * GitHub-style slugger used to give headings stable anchor ids, matching the
+ * anchors produced for Chinese headings (e.g. `一、基础信息` -> `一基础信息`).
+ */
+function ghSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replaceAll(/[^\p{L}\p{N}\-_ ]/gu, '')
+    .replaceAll(' ', '-')
+    .replaceAll(/^-+|-+$/g, '')
+}
+
 const markdownRenderer = new Renderer()
 const renderDefaultCode = markdownRenderer.code.bind(markdownRenderer)
+const renderDefaultHeading = markdownRenderer.heading.bind(markdownRenderer)
 
 markdownRenderer.code = (token: Tokens.Code): string => {
   const language = token.lang?.toLowerCase()
@@ -621,6 +634,13 @@ markdownRenderer.code = (token: Tokens.Code): string => {
   }
 
   return renderDefaultCode(token)
+}
+
+// Emit stable anchor ids on headings so in-page 目录 / sidebar TOC links work.
+markdownRenderer.heading = function (token: Tokens.Heading): string {
+  const id = ghSlug(token.text ?? '')
+  if (!id) return renderDefaultHeading(token)
+  return `<h${token.depth} id="${id}">${this.parser.parseInline(token.tokens)}</h${token.depth}>`
 }
 
 const markdownExtensions: MarkedExtension[] = [
@@ -727,6 +747,11 @@ function addExternalLinkAttributes(html: string): string {
   template.innerHTML = html
 
   template.content.querySelectorAll('a[href]').forEach((link) => {
+    const href = link.getAttribute('href') ?? ''
+    if (href.startsWith('#')) {
+      // In-page anchor: keep default (same-tab) navigation.
+      return
+    }
     link.setAttribute('target', '_blank')
     link.setAttribute('rel', 'noopener noreferrer')
   })

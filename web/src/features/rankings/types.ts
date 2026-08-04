@@ -123,6 +123,14 @@ export type VendorShareSeries = {
   buckets: number
 }
 
+export type UserRanking = {
+  rank: number
+  /** Masked display name (fallback: masked username). Never the raw username. */
+  display_name: string
+  /** Total tokens routed through this user in the period. */
+  total_tokens: number
+}
+
 export type RankingsSnapshot = {
   // Overall (all categories) ------------------------------------------------
   models: ModelRanking[]
@@ -135,4 +143,6 @@ export type RankingsSnapshot = {
   models_history: ModelHistorySeries
   /** 100%-stacked area history of token share by vendor over the period. */
   vendor_share_history: VendorShareSeries
+  /** Top users by token usage. Names are masked server-side. */
+  users: UserRanking[]
 }

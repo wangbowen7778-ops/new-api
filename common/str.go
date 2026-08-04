@@ -136,6 +136,54 @@ func MaskEmail(email string) string {
 	return "***@" + email[atIndex+1:]
 }
 
+// MaskUsername desensitizes a user-facing name on public pages.
+//   - empty                       -> "***"
+//   - email (contains "@")        -> keep first + last rune of local part
+//     (local part <= 2 runes -> "***"), keep domain. e.g. zhang123@x.com -> z***3@x.com
+//   - pure ASCII digits (phone)   -> len>=8: first 3 + "****" + last 4 (138****5678);
+//     len 4..7: first + "***" + last; len<=3: "***"
+//   - anything else               -> unchanged
+func MaskUsername(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "***"
+	}
+
+	if atIndex := strings.Index(name, "@"); atIndex != -1 {
+		local := name[:atIndex]
+		domain := name[atIndex+1:]
+		if len(local) <= 2 {
+			return "***@" + domain
+		}
+		r := []rune(local)
+		return string(r[0]) + "***" + string(r[len(r)-1]) + "@" + domain
+	}
+
+	if isAllASCIIDigits(name) {
+		n := len(name)
+		switch {
+		case n >= 8:
+			return name[:3] + "****" + name[n-4:]
+		case n > 3:
+			return name[:1] + "***" + name[n-1:]
+		default:
+			return "***"
+		}
+	}
+
+	return name
+}
+
+// isAllASCIIDigits reports whether s is non-empty and only contains 0-9.
+func isAllASCIIDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
 // MaskSensitiveInfo moved to the conversion kit (kitutil) because the types
 // package error formatting depends on it; host callers keep this name.
 func MaskSensitiveInfo(str string) string {

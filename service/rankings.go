@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 )
 
@@ -16,6 +17,7 @@ const (
 	rankingHistoryLimit     = 10
 	rankingVendorLimit      = 5
 	rankingMoverLimit       = 6
+	rankingUserLimit        = 5
 	rankingOthersLabel      = "Others"
 	rankingUnknownVendor    = "Unknown"
 )
@@ -27,6 +29,15 @@ type RankingsResponse struct {
 	TopDroppers        []RankingMover     `json:"top_droppers"`
 	ModelsHistory      ModelHistorySeries `json:"models_history"`
 	VendorShareHistory VendorShareSeries  `json:"vendor_share_history"`
+	Users              []RankedUser       `json:"users"`
+}
+
+// RankedUser is one row of the public "Top Users" leaderboard. DisplayName is
+// ALWAYS the masked name (never the raw username) and is safe to expose.
+type RankedUser struct {
+	Rank        int    `json:"rank"`
+	DisplayName string `json:"display_name"`
+	TotalTokens int64  `json:"total_tokens"`
 }
 
 type RankedModel struct {
@@ -189,6 +200,11 @@ func buildRankingsSnapshot(config rankingPeriodConfig, now time.Time) (*Rankings
 		return nil, err
 	}
 
+	userTotals, err := model.GetRankingUserTotals(startTime, endTime, rankingUserLimit)
+	if err != nil {
+		return nil, err
+	}
+
 	var previousTotals []model.RankingQuotaTotal
 	if config.hasPrevious {
 		previousStart, previousEnd := previousRankingTimeRange(config, startTime)
@@ -216,7 +232,27 @@ func buildRankingsSnapshot(config rankingPeriodConfig, now time.Time) (*Rankings
 		TopDroppers:        droppers,
 		ModelsHistory:      modelHistory,
 		VendorShareHistory: vendorHistory,
+		Users:              buildRankedUsers(userTotals),
 	}, nil
+}
+
+// buildRankedUsers turns aggregated user token totals into public leaderboard
+// rows. DisplayName is preferred over Username and the chosen name is always
+// masked before it leaves the API. Raw usernames never reach the response.
+func buildRankedUsers(totals []model.RankingUserTotal) []RankedUser {
+	rows := make([]RankedUser, 0, len(totals))
+	for idx, item := range totals {
+		name := item.DisplayName
+		if name == "" {
+			name = item.Username
+		}
+		rows = append(rows, RankedUser{
+			Rank:        idx + 1,
+			DisplayName: common.MaskUsername(name),
+			TotalTokens: item.TotalTokens,
+		})
+	}
+	return rows
 }
 
 func rankingTimeRange(config rankingPeriodConfig, now time.Time) (int64, int64) {
