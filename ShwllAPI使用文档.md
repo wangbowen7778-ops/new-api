@@ -61,8 +61,6 @@ x-api-key: sk-你的令牌                   # Anthropic 风格
 x-goog-api-key: sk-你的令牌              # Gemini 风格
 ```
 
-【图片占位：请在此插入——ShwllAPI 网站首页 / 接口说明示意图】
-
 ---
 
 ## 二、获取与查询令牌
@@ -89,8 +87,6 @@ x-goog-api-key: sk-你的令牌              # Gemini 风格
 - 每一条调用明细（模型、用时、额度、是否流式等），支持按类型筛选和关键字搜索
 
 「高级设置」里可调整 QuotaPerUnit（额度单位）和货币符号，用于把额度换算成估算金额。
-
-【图片占位：请在此插入——令牌查询页截图】
 
 ### 3. 通过 API 查询（可选）
 
@@ -159,7 +155,7 @@ cc-switch 是一个用于管理多套 Claude Code 配置的图形化工具，可
 
 > cc-switch 本质上是在帮你管理上面第 三 节中的环境变量 / settings.json，所以 Base URL 和 Token 的填写规则与 Claude Code 完全一致。
 
-![img_3.png](img_3.png)【图片占位：请在此插入——cc-switch 供应商配置界面截图】
+![img_3.png](img_3.png)
 
 ---
 
@@ -366,8 +362,6 @@ default_model = "shwll-model"
 > kimi
 > ```
 
-
-
 ---
 
 ## 九、ZCode 接入
@@ -392,7 +386,7 @@ ZCode 是智谱（Zhipu AI）推出的桌面 AI 编程工具，免费使用，�
 
 > 注意：OpenAI 兼容协议（Completions / Responses）的 Base URL 一般带 `/v1`；若使用 Anthropic 协议，Base URL 不带 `/v1`。
 
-![img_1.png](img_1.png)【图片占位：请在此插入——ZCode 添加供应商/模型设置界面截图】
+![img_1.png](img_1.png)
 
 ---
 
@@ -442,8 +436,6 @@ WorkBuddy 是腾讯云推出的 AI 桌面智能体/办公工具，支持通过�
 
 > 注意：Base URL 必须带 `/v1`（或完整写到 `/v1/chat/completions`），不要有多余斜杠或写成 `/v1/v1`。模型 ID 必须与模型列表完全一致（大小写敏感）。
 
-【图片占位：请在此插入——WorkBuddy 添加自定义模型界面截图】
-
 ---
 
 ## 十一、CodeBuddy 接入
@@ -486,8 +478,6 @@ codebuddy --version   # 验证安装
 
 > 注意：`url` 需写到完整接口路径（以 `/chat/completions` 结尾）；仅支持 OpenAI 协议。若提示 model not found，检查模型 ID 是否与模型列表一致。
 
-【图片占位：请在此插入——CodeBuddy 运行/模型切换界面截图】
-
 ---
 
 ## 十二、VSCode 接入（Continue / Cline）
@@ -527,8 +517,6 @@ VSCode 本身不内置自定义 API 中转功能，需要借助 AI 插件（如 
 | API Key | `sk-你的令牌` |
 | Model ID | `claude-sonnet-4-5` 等 |
 
-【图片占位：请在此插入——VSCode + Continue / Cline 配置界面截图】
-
 ---
 
 ## 十三、ChatGPT 桌面版接入
@@ -555,7 +543,7 @@ ChatGPT 桌面端的编程 / 终端能力基于 **Codex**。官方客户端本�
 > - 若某些模型在 Responses 格式下报错，可在 cc-switch「设置 → 路由」中打开「路由总开关」并启用 Codex 接管，由本地路由把 Responses 转成 Chat Completions 再转发，兼容性更好。
 > - 想保留 ChatGPT 官方账号登录的同时使用本站，可在 cc-switch「设置 → 通用 → Codex 应用增强」中开启「切换第三方时保留官方登录」。
 
-![img_4.png](img_4.png)【图片占位：请在此插入——cc-switch 的 Codex 供应商配置界面截图】
+![img_4.png](img_4.png)
 
 ---
 
@@ -570,8 +558,6 @@ ChatGPT 桌面端的编程 / 终端能力基于 **Codex**。官方客户端本�
 3. 保存后，顶部聊天框模型下拉即可切换。
 
 > Cursor 的 Agent / Chat 功能对自定义 Base URL 的兼容性会随版本变化，若无法生效，请使用 Cursor 官方支持的接入方式或改用 Continue 等插件。
-
-【图片占位：请在此插入——Cursor 模型设置界面截图】
 
 ---
 
@@ -597,7 +583,7 @@ TRAE 是字节跳动推出的 AI IDE。新版 TRAE 支持在「设置 → 模型
 > - 部分 TRAE 版本要求 URL 写到**完整接口路径**（OpenAI 协议到 `/chat/completions`，Anthropic 协议到 `/messages`）。以你所装版本的界面提示为准，两种都试，能通过校验的那个就是对的。
 > - 若你的版本没有「自定义配置」入口，请升级到支持自定义 Base URL 的版本。
 
-![img.png](img.png)【图片占位：请在此插入——TRAE 自定义模型配置界面截图】
+![img.png](img.png)
 
 ---
 
