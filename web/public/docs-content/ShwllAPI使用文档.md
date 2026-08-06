@@ -30,28 +30,29 @@
 
 ## 一、基础信息
 
-| 项目 | 值 |
-|---|---|
-| Base URL（服务地址） | `https://www.shwll.cn` |
-| 令牌查询页 | `https://www.shwll.cn/token/query` |
-| OpenAI 格式接口 | `https://www.shwll.cn/v1/chat/completions` |
-| Claude 格式接口 | `https://www.shwll.cn/v1/messages` |
-| Gemini 格式接口 | `https://www.shwll.cn/v1beta/models` |
-| 模型列表接口 | `https://www.shwll.cn/v1/models` |
-| 鉴权方式 | 请求头 `Authorization: Bearer sk-你的令牌` |
+| 项目                 | 值                                         |
+| -------------------- | ------------------------------------------ |
+| Base URL（服务地址） | `https://www.shwll.cn`                     |
+| 令牌查询页           | `https://www.shwll.cn/token/query`         |
+| OpenAI 格式接口      | `https://www.shwll.cn/v1/chat/completions` |
+| Claude 格式接口      | `https://www.shwll.cn/v1/messages`         |
+| Gemini 格式接口      | `https://www.shwll.cn/v1beta/models`       |
+| 模型列表接口         | `https://www.shwll.cn/v1/models`           |
+| 鉴权方式             | 请求头 `Authorization: Bearer sk-你的令牌` |
 
 > 提示：
+>
 > - Base URL 末尾不要加 `/v1`，`/v1` 由各客户端 / SDK 按需自动拼接。
 > - 少数客户端（如部分老版本 OpenAI 客户端）要求 Base URL 直接填到 `/v1`，请参考对应章节的说明。
 > - **是否带 `/v1` 的判断技巧**：客户端 Base URL 配置项的提示文案若写着「例如 `https://api.openai.com/v1`」，就带 `/v1`；若写着「例如 `https://api.openai.com`」，就不带。也可两种都试，能拉到模型列表的那个就是对的。
 
 **支持的接口格式一览：**
 
-| 格式 | 路径 | 适用客户端 |
-|---|---|---|
-| OpenAI | `/v1/chat/completions`、`/v1/completions`、`/v1/embeddings`、`/v1/images/generations`、`/v1/audio/*`、`/v1/responses`、`/v1/rerank`、`/v1/moderations` | Kimi Code、ZCode、WorkBuddy、CodeBuddy、VSCode（Continue/Cline）、OpenAI SDK 等 |
-| Claude (Anthropic) | `/v1/messages` | Claude Code、Anthropic SDK 等 |
-| Gemini | `/v1beta/models/{model}:generateContent` | Google SDK、部分支持 Gemini 的客户端 |
+| 格式               | 路径                                                                                                                                                   | 适用客户端                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| OpenAI             | `/v1/chat/completions`、`/v1/completions`、`/v1/embeddings`、`/v1/images/generations`、`/v1/audio/*`、`/v1/responses`、`/v1/rerank`、`/v1/moderations` | Kimi Code、ZCode、WorkBuddy、CodeBuddy、VSCode（Continue/Cline）、OpenAI SDK 等 |
+| Claude (Anthropic) | `/v1/messages`                                                                                                                                         | Claude Code、Anthropic SDK 等                                                   |
+| Gemini             | `/v1beta/models/{model}:generateContent`                                                                                                               | Google SDK、部分支持 Gemini 的客户端                                            |
 
 **鉴权请求头**（三种任选其一，效果相同）：
 
@@ -144,11 +145,11 @@ cc-switch 是一个用于管理多套 Claude Code 配置的图形化工具，可
 1. 打开 cc-switch，进入「供应商 / Providers」管理页。
 2. 点击「新增 / Add」新建一个配置，按下表填写：
 
-| 字段 | 填写内容 |
-|---|---|
-| 名称 Name | 本站（如 `shwll`，自定义） |
-| Base URL | `https://www.shwll.cn` |
-| API Key / Token | `sk-你的令牌` |
+| 字段            | 填写内容                   |
+| --------------- | -------------------------- |
+| 名称 Name       | 本站（如 `shwll`，自定义） |
+| Base URL        | `https://www.shwll.cn`     |
+| API Key / Token | `sk-你的令牌`              |
 
 3. 保存后，在配置列表中点击该条目即可切换为当前生效配置。
 4. 切换后直接启动 `claude`，会自动应用所选配置。
@@ -288,18 +289,18 @@ npm install openai
 ```
 
 ```js
-import OpenAI from "openai";
+import OpenAI from 'openai'
 
 const client = new OpenAI({
-  apiKey: "sk-你的令牌",
-  baseURL: "https://www.shwll.cn/v1",   // 注意带 /v1
-});
+  apiKey: 'sk-你的令牌',
+  baseURL: 'https://www.shwll.cn/v1', // 注意带 /v1
+})
 
 const resp = await client.chat.completions.create({
-  model: "claude-sonnet-4-5",
-  messages: [{ role: "user", content: "你好" }],
-});
-console.log(resp.choices[0].message.content);
+  model: 'claude-sonnet-4-5',
+  messages: [{ role: 'user', content: '你好' }],
+})
+console.log(resp.choices[0].message.content)
 ```
 
 ### 2. Anthropic SDK
@@ -309,19 +310,19 @@ npm install @anthropic-ai/sdk
 ```
 
 ```js
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({
-  apiKey: "sk-你的令牌",
-  baseURL: "https://www.shwll.cn",       // 注意不带 /v1
-});
+  apiKey: 'sk-你的令牌',
+  baseURL: 'https://www.shwll.cn', // 注意不带 /v1
+})
 
 const resp = await client.messages.create({
-  model: "claude-sonnet-4-5",
+  model: 'claude-sonnet-4-5',
   max_tokens: 1024,
-  messages: [{ role: "user", content: "你好" }],
-});
-console.log(resp.content[0].text);
+  messages: [{ role: 'user', content: '你好' }],
+})
+console.log(resp.content[0].text)
 ```
 
 ---
@@ -351,6 +352,7 @@ default_model = "shwll-model"
 3. 保存后重新打开 `kimi`，输入 `/config` 或观察顶部状态栏，确认当前使用的是 `shwll-model`。
 
 > 小贴士：
+>
 > - `base_url` 以 `/v1` 结尾；若报 404，可尝试去掉 `/v1`。
 > - 若系统中存在 `OPENAI_BASE_URL` / `OPENAI_API_KEY` 环境变量且指向其他地址，会覆盖配置文件，务必保持一致（最容易踩坑的地方）。
 > - 也可用环境变量临时切换：
@@ -374,11 +376,11 @@ ZCode 是智谱（Zhipu AI）推出的桌面 AI 编程工具，免费使用，�
 2. 打开 ZCode → 「设置 → 模型设置」（也可通过对话框中的「管理模型」入口）。
 3. 点击「添加供应商 / Add provider」，按下表填写：
 
-| 字段 | 填写内容 |
-|---|---|
-| Name | 本站（如 `shwll`，自定义） |
-| Base URL | `https://www.shwll.cn/v1` |
-| API Key | `sk-你的令牌` |
+| 字段       | 填写内容                                |
+| ---------- | --------------------------------------- |
+| Name       | 本站（如 `shwll`，自定义）              |
+| Base URL   | `https://www.shwll.cn/v1`               |
+| API Key    | `sk-你的令牌`                           |
 | API format | Chat completions（`/chat/completions`） |
 
 4. 添加模型，Model ID 填你要用的模型名（如 `claude-sonnet-4-5`）。
@@ -400,12 +402,12 @@ WorkBuddy 是腾讯云推出的 AI 桌面智能体/办公工具，支持通过�
 2. 选择「模型 → 添加模型 → 自定义模型 / Custom」。
 3. 按下表填写：
 
-| 字段 | 填写内容 |
-|---|---|
-| API Base URL | `https://www.shwll.cn/v1` |
-| API Key | `sk-你的令牌` |
-| 模型名称 | `claude-sonnet-4-5` 等（以模型列表为准） |
-| Timeout | 建议调高，如 60 秒 |
+| 字段         | 填写内容                                 |
+| ------------ | ---------------------------------------- |
+| API Base URL | `https://www.shwll.cn/v1`                |
+| API Key      | `sk-你的令牌`                            |
+| 模型名称     | `claude-sonnet-4-5` 等（以模型列表为准） |
+| Timeout      | 建议调高，如 60 秒                       |
 
 4. 保存后**完全退出并重启 WorkBuddy**（仅关闭窗口无效），新模型才会出现在模型列表。
 
@@ -511,11 +513,11 @@ VSCode 本身不内置自定义 API 中转功能，需要借助 AI 插件（如 
 2. 打开 Cline 设置 → API Provider 选择 **OpenAI Compatible**。
 3. 按下表填写：
 
-| 字段 | 填写内容 |
-|---|---|
+| 字段     | 填写内容                  |
+| -------- | ------------------------- |
 | Base URL | `https://www.shwll.cn/v1` |
-| API Key | `sk-你的令牌` |
-| Model ID | `claude-sonnet-4-5` 等 |
+| API Key  | `sk-你的令牌`             |
+| Model ID | `claude-sonnet-4-5` 等    |
 
 ---
 
@@ -528,17 +530,18 @@ ChatGPT 桌面端的编程 / 终端能力基于 **Codex**。官方客户端本�
 1. 打开 cc-switch，进入「Codex」管理页。
 2. 点击「新增 / Add」新建一个配置，按下表填写：
 
-| 字段 | 填写内容 |
-|---|---|
-| 名称 Name | 本站（如 `shwll`，自定义） |
-| Base URL | `https://www.shwll.cn/v1` |
-| API Key / Token | `sk-你的令牌` |
-| 模型 | `claude-sonnet-4-5` 等（以模型列表为准） |
+| 字段            | 填写内容                                 |
+| --------------- | ---------------------------------------- |
+| 名称 Name       | 本站（如 `shwll`，自定义）               |
+| Base URL        | `https://www.shwll.cn/v1`                |
+| API Key / Token | `sk-你的令牌`                            |
+| 模型            | `claude-sonnet-4-5` 等（以模型列表为准） |
 
 3. 保存后，在配置列表中点击该条目切换为当前生效配置。
 4. **重启 Codex / ChatGPT 桌面端**，即可在模型选择中看到本站模型。
 
 > 说明：
+>
 > - Codex 原生走 OpenAI **Responses** 协议，本站已支持 `/v1/responses`，可直接直连。
 > - 若某些模型在 Responses 格式下报错，可在 cc-switch「设置 → 路由」中打开「路由总开关」并启用 Codex 接管，由本地路由把 Responses 转成 Chat Completions 再转发，兼容性更好。
 > - 想保留 ChatGPT 官方账号登录的同时使用本站，可在 cc-switch「设置 → 通用 → Codex 应用增强」中开启「切换第三方时保留官方登录」。
@@ -570,16 +573,17 @@ TRAE 是字节跳动推出的 AI IDE。新版 TRAE 支持在「设置 → 模型
 1. 打开 TRAE → 设置（`Ctrl + ,`）→ 模型 → 添加模型 → 选择「自定义配置」。
 2. 按下表填写：
 
-| 字段 | 填写内容 |
-|---|---|
-| API 格式 | OpenAI |
+| 字段           | 填写内容                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| API 格式       | OpenAI                                                                                                       |
 | 自定义请求地址 | `https://www.shwll.cn/v1`（若界面要求完整路径，则填 `https://www.shwll.cn/v1/chat/completions`，见下方提示） |
-| 模型 ID | `claude-sonnet-4-5` 等（以模型列表为准） |
-| API 密钥 | `sk-你的令牌` |
+| 模型 ID        | `claude-sonnet-4-5` 等（以模型列表为准）                                                                     |
+| API 密钥       | `sk-你的令牌`                                                                                                |
 
 3. 保存后 TRAE 会调用接口校验 API Key，成功即加入模型列表，在对话窗口切换即可。
 
 > 提示：
+>
 > - 部分 TRAE 版本要求 URL 写到**完整接口路径**（OpenAI 协议到 `/chat/completions`，Anthropic 协议到 `/messages`）。以你所装版本的界面提示为准，两种都试，能通过校验的那个就是对的。
 > - 若你的版本没有「自定义配置」入口，请升级到支持自定义 Base URL 的版本。
 
@@ -602,9 +606,9 @@ curl https://www.shwll.cn/v1/models \
 {
   "object": "list",
   "data": [
-    {"id": "claude-sonnet-4-5", "object": "model", "owned_by": "anthropic"},
-    {"id": "gpt-4o", "object": "model", "owned_by": "openai"},
-    {"id": "gemini-2.5-pro", "object": "model", "owned_by": "google"}
+    { "id": "claude-sonnet-4-5", "object": "model", "owned_by": "anthropic" },
+    { "id": "gpt-4o", "object": "model", "owned_by": "openai" },
+    { "id": "gemini-2.5-pro", "object": "model", "owned_by": "google" }
   ]
 }
 ```
