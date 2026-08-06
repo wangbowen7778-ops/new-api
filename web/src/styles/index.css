@@ -26,6 +26,13 @@ For commercial licensing, please contact support@quantumnous.com
  * that activates it. Loaded globally so font-switching is instantaneous
  * with no FOUT once the variable is fetched. */
 @import '@fontsource-variable/lora';
+/* Landing page fonts: Inter (body), Dancing Script (brand), Instrument Serif
+ * (hero heading). Latin-only faces — Chinese text falls back to the CJK stacks
+ * in the `.landing-font-*` utilities below. Loaded globally so font-switching
+ * is instantaneous; files are only downloaded when the faces are used. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/dancing-script';
+@import '@fontsource/instrument-serif';
 
 @import './theme.css';
 @import './theme-presets.css';
@@ -695,4 +702,71 @@ For commercial licensing, please contact support@quantumnous.com
   .auto-group-flow-border {
     display: none;
   }
+}
+
+/* ── Video-hero landing page ──
+ * The landing is always-dark and self-contained: hardcoded hex / white-alpha
+ * colors only, never the app's semantic theme tokens. Fonts are Latin-first
+ * with CJK fallback stacks so Chinese text keeps rendering elegantly. */
+.landing-font-body {
+  font-family:
+    'Inter Variable',
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    'Noto Sans SC',
+    'Source Han Sans SC',
+    sans-serif;
+}
+
+.landing-font-brand {
+  font-family:
+    'Dancing Script Variable', 'Dancing Script', 'Noto Serif SC', 'Songti SC',
+    'SimSun', 'Microsoft YaHei', 'PingFang SC', serif;
+}
+
+.landing-font-instrument {
+  font-family: 'Instrument Serif', var(--font-serif);
+}
+
+.text-glow {
+  text-shadow:
+    0 0 10px rgb(255 255 255 / 0.35),
+    0 0 40px rgb(255 255 255 / 0.22),
+    0 0 90px rgb(255 255 255 / 0.16);
+}
+
+.button-glow {
+  box-shadow:
+    0 0 20px rgb(255 255 255 / 0.25),
+    0 0 60px rgb(255 255 255 / 0.12);
+}
+
+.button-glow:hover {
+  box-shadow:
+    0 0 28px rgb(255 255 255 / 0.4),
+    0 0 80px rgb(255 255 255 / 0.2);
+}
+
+.landing-btn-primary {
+  display: inline-block;
+  background: #fff;
+  color: #000;
+  padding: 0.875rem 2rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0.025em;
+  transition:
+    background-color 300ms ease,
+    box-shadow 300ms ease;
+}
+
+.landing-btn-primary:hover {
+  background: rgb(255 255 255 / 0.9);
 }

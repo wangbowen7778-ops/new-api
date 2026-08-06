@@ -5254,6 +5254,9 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Every Model.": "所有模型",
+    "One Gateway.": "一个网关",
+    "One key, every model. Unified access to hundreds of top AI models via a single API, with transparent billing and round-the-clock stability.": "一个密钥，调用所有模型。通过统一 API 接入数百个顶级 AI 模型，透明计费，全天候稳定。"
   }
 }
