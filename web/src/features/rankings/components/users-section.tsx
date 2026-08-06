@@ -49,8 +49,8 @@ type UsersSectionProps = {
 }
 
 /**
- * "Top Users" card: a horizontal bar chart of the top 5 users by token usage
- * paired below with the ranked list. Names are already masked server-side.
+ * "Top Users" card: a horizontal bar chart of the top 5 users by token usage,
+ * ranked 1..5 top to bottom. Names are already masked server-side.
  */
 export function UsersSection(props: UsersSectionProps) {
   const { t } = useTranslation()
@@ -80,8 +80,9 @@ export function UsersSection(props: UsersSectionProps) {
       data: [
         {
           id: 'top-users',
-          // Reverse so rank 1 (largest bar) sits at the top of the chart.
-          values: [...props.rows].reverse().map((row) => ({
+          // Data is already ordered 1..5; VChart lays the first item at the
+          // top, so rank 1 renders as the largest bar at the top.
+          values: props.rows.map((row) => ({
             name: row.display_name,
             tokens: row.total_tokens,
           })),
@@ -156,59 +157,25 @@ export function UsersSection(props: UsersSectionProps) {
           {t('No user data available')}
         </div>
       ) : (
-        <>
-          {/* Horizontal bar chart ------------------------------------------ */}
-          <div className='px-5 pb-2'>
-            <div className='h-52'>
-              {themeReady && spec ? (
-                <VChart
-                  key={`users-chart-${resolvedTheme}-${props.period}`}
-                  spec={{
-                    ...spec,
-                    theme: resolvedTheme === 'dark' ? 'dark' : 'light',
-                    background: 'transparent',
-                  }}
-                  option={VCHART_OPTION}
-                />
-              ) : (
-                <div className='text-muted-foreground/80 flex h-full items-center justify-center text-xs'>
-                  {t('No user data available')}
-                </div>
-              )}
-            </div>
+        <div className='px-5 pb-5'>
+          <div className='h-52'>
+            {themeReady && spec ? (
+              <VChart
+                key={`users-chart-${resolvedTheme}-${props.period}`}
+                spec={{
+                  ...spec,
+                  theme: resolvedTheme === 'dark' ? 'dark' : 'light',
+                  background: 'transparent',
+                }}
+                option={VCHART_OPTION}
+              />
+            ) : (
+              <div className='text-muted-foreground/80 flex h-full items-center justify-center text-xs'>
+                {t('No user data available')}
+              </div>
+            )}
           </div>
-
-          {/* Leaderboard block --------------------------------------------- */}
-          <div className='border-t'>
-            <ul className='px-5 pt-1 pb-4'>
-              {props.rows.map((row) => (
-                <li key={row.rank} className='flex items-center gap-3 py-2.5'>
-                  <span className='text-muted-foreground/80 w-6 shrink-0 text-right font-mono text-xs tabular-nums'>
-                    {row.rank}.
-                  </span>
-                  <span
-                    aria-hidden
-                    className='size-2.5 shrink-0 rounded-full'
-                    style={{
-                      backgroundColor: colourMap[row.display_name] ?? '#94a3b8',
-                    }}
-                  />
-                  <span className='text-foreground min-w-0 flex-1 truncate font-mono text-sm font-medium'>
-                    {row.display_name}
-                  </span>
-                  <div className='shrink-0 text-right'>
-                    <div className='text-foreground font-mono text-sm font-semibold tabular-nums'>
-                      {formatTokens(row.total_tokens)}{' '}
-                      <span className='text-muted-foreground/80 font-normal'>
-                        {t('tokens')}
-                      </span>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
+        </div>
       )}
     </section>
   )
