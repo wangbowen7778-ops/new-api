@@ -1,4 +1,5 @@
 .idea
+.review
 .vscode
 .zed
 .history
@@ -20,7 +21,7 @@ tiktoken_cache
 .gocache
 .gomodcache/
 .cache
-plans
+.plans
 .claude
 .cursor
 
@@ -37,12 +38,7 @@ skills-lock.json
 
 # Local-only live probes and scratch test workspaces.
 .local-tests/
-service/relayconvert/chat_responses_live_local_test.go
-
-# Docker image export archives (built locally, not source).
-*.tar
-# i18n sync transient reports (only _sync-report.json is committed).
-web/src/i18n/locales/_reports/*.untranslated.json
+relaykit/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
 go.work
 go.work.sum
