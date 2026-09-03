@@ -4,9 +4,10 @@
   "private": false,
   "type": "module",
   "scripts": {
-    "dev": "rsbuild dev",
-    "build": "rsbuild build",
-    "build:check": "tsgo -b && rsbuild build",
+    "dev": "bun run docs:sync && rsbuild dev",
+    "build": "bun run docs:sync && rsbuild build",
+    "build:check": "tsgo -b && bun run docs:sync && rsbuild build",
+    "docs:sync": "node scripts/sync-docs-content.mjs",
     "typecheck": "tsgo -b",
     "lint": "oxlint -c .oxlintrc.json .",
     "lint:fix": "oxlint -c .oxlintrc.json . --fix",

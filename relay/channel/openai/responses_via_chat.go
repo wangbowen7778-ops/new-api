@@ -58,6 +58,9 @@ func OaiChatToResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		return nil, types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 	}
 
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// before it reaches the client.
+	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 	return usage, nil
 }

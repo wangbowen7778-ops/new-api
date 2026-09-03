@@ -16,6 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-/** Full-screen background video for the home landing page. */
-export const LANDING_VIDEO_URL =
-  'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260613_180732_a54afbf6-b30d-470e-861f-669871f09f67.mp4'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+
+import { Main } from '@/components/layout'
+import { Drawing } from '@/features/drawing'
+import { isSidebarModuleEnabled } from '@/lib/nav-modules'
+
+export const Route = createFileRoute('/_authenticated/drawing/')({
+  beforeLoad: () => {
+    if (!isSidebarModuleEnabled('chat', 'drawing')) {
+      throw redirect({ to: '/dashboard' })
+    }
+  },
+  component: DrawingPage,
+})
+
+function DrawingPage() {
+  return (
+    <Main className='p-0'>
+      <Drawing />
+    </Main>
+  )
+}

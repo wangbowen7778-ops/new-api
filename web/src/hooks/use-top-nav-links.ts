@@ -83,7 +83,7 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Rankings'), href: '/rankings', requiresAuth })
   }
 
-  // Docs (in-site page; renders web/public/docs-content markdown)
+  // Docs (in-site page; root documentation is synced into public assets)
   if (modules?.docs !== false) {
     links.push({ title: t('Docs'), href: '/docs' })
   }

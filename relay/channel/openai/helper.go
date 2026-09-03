@@ -193,10 +193,16 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 	responseId string, createAt int64, model string, systemFingerprint string,
 	usage *dto.Usage, containStreamUsage bool) {
 
+	// Model mapping disguise: rewrite the real upstream model name in the
+	// final chunk before format conversion or write-out.
+	lastStreamData = helper.MaskModelText(info, lastStreamData)
+
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
 		if info.ShouldIncludeUsage && !containStreamUsage {
-			response := helper.GenerateFinalUsageResponse(responseId, createAt, model, *usage)
+			// Model mapping disguise: the usage envelope must claim the mapped
+			// model name, not the real upstream one.
+			response := helper.GenerateFinalUsageResponse(responseId, createAt, helper.MaskClaimedModel(info, model), *usage)
 			response.SetSystemFingerprint(systemFingerprint)
 			helper.ObjectData(c, response)
 		}
@@ -261,9 +267,9 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 	}
 }
 
-func sendResponsesStreamData(c *gin.Context, streamResponse dto.ResponsesStreamResponse, data string) {
+func sendResponsesStreamData(c *gin.Context, info *relaycommon.RelayInfo, streamResponse dto.ResponsesStreamResponse, data string) {
 	if data == "" {
 		return
 	}
-	_ = helper.ResponseChunkData(c, streamResponse, data)
+	_ = helper.ResponseChunkData(c, streamResponse, helper.MaskModelText(info, data))
 }

@@ -25,9 +25,10 @@ import { cn } from '@/lib/utils'
  * Minimal 中文/EN switcher for the fixed landing navbar.
  *
  * The site-wide `LanguageSwitcher` is a 7-language dropdown styled with semantic
- * theme tokens, which clashes with the always-dark landing. This inline toggle
- * keeps the two main interface languages reachable on the dark background while
- * relying on `i18next-browser-languagedetector` for persistence (localStorage).
+ * theme tokens, which clashes with the self-contained landing palette. This
+ * inline toggle keeps the two main interface languages reachable on the light
+ * background while relying on `i18next-browser-languagedetector` for
+ * persistence (localStorage).
  */
 export function LanguageToggle() {
   const { i18n } = useTranslation()
@@ -46,12 +47,12 @@ export function LanguageToggle() {
         onClick={() => setLang('zhCN')}
         className={cn(
           'rounded-md px-1.5 py-1 transition-colors duration-200',
-          isZh ? 'text-white' : 'text-white/50 hover:text-white/80'
+          isZh ? 'text-[#1d1d1f]' : 'text-[#1d1d1f]/50 hover:text-[#1d1d1f]/80'
         )}
       >
         中文
       </button>
-      <span aria-hidden className='text-white/30'>
+      <span aria-hidden className='text-[#1d1d1f]/30'>
         /
       </span>
       <button
@@ -60,7 +61,7 @@ export function LanguageToggle() {
         onClick={() => setLang('en')}
         className={cn(
           'rounded-md px-1.5 py-1 transition-colors duration-200',
-          !isZh ? 'text-white' : 'text-white/50 hover:text-white/80'
+          !isZh ? 'text-[#1d1d1f]' : 'text-[#1d1d1f]/50 hover:text-[#1d1d1f]/80'
         )}
       >
         EN

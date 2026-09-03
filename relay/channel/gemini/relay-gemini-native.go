@@ -43,6 +43,9 @@ func GeminiTextGenerationHandler(c *gin.Context, info *relaycommon.RelayInfo, re
 	// 计算使用量（优先上游 UsageMetadata，缺失时本地估算并保留 Gemini 计费语义）
 	usage := buildUsageFromGeminiResponse(c, info, &geminiResponse)
 
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// (text, thoughts, model) before it reaches the client.
+	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &usage, nil
@@ -83,7 +86,7 @@ func GeminiTextGenerationStreamHandler(c *gin.Context, info *relaycommon.RelayIn
 	helper.SetEventStreamHeaders(c)
 
 	return geminiStreamHandler(c, info, resp, func(data string, geminiResponse *dto.GeminiChatResponse) bool {
-		err := helper.StringData(c, data)
+		err := helper.StringData(c, helper.MaskModelText(info, data))
 		if err != nil {
 			logger.LogError(c, "failed to write stream data: "+err.Error())
 			return false

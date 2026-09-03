@@ -36,6 +36,9 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	}
 
 	// 写入新的 response body
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// (output text, reasoning, model field) before it reaches the client.
+	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	// compute usage
@@ -86,7 +89,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			sr.Error(err)
 			return
 		}
-		sendResponsesStreamData(c, streamResponse, data)
+		sendResponsesStreamData(c, info, streamResponse, data)
 		switch streamResponse.Type {
 		case "response.completed", "response.done":
 			if streamResponse.Response != nil {

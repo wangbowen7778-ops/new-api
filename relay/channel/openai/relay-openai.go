@@ -24,6 +24,10 @@ func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, fo
 		return nil
 	}
 
+	// Model mapping disguise: rewrite the real upstream model name in the chunk
+	// (content, reasoning, model field) before it reaches the client.
+	data = helper.MaskModelText(info, data)
+
 	if !forceFormat && !thinkToContent {
 		return helper.StringData(c, data)
 	}
@@ -285,6 +289,13 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		}
 	}
 
+	// Model mapping disguise: non-streaming responses drop reasoning_content /
+	// reasoning so the model's real thinking never reaches the client.
+	stripReasoning := helper.ModelMaskingEnabled(info)
+	if stripReasoning {
+		helper.StripReasoningContent(info, &simpleResponse)
+	}
+
 	forceFormat := false
 	if info.ChannelSetting.ForceFormat {
 		forceFormat = true
@@ -312,22 +323,31 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
-		if usageModified {
-			var bodyMap map[string]interface{}
-			err = common.Unmarshal(responseBody, &bodyMap)
-			if err != nil {
-				return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
-			}
-			bodyMap["usage"] = simpleResponse.Usage
-			responseBody, _ = common.Marshal(bodyMap)
-		}
-		if forceFormat {
+		if stripReasoning {
+			// Re-marshal from the stripped struct so reasoning_content/reasoning
+			// are dropped even on the pass-through path.
 			responseBody, err = common.Marshal(simpleResponse)
 			if err != nil {
 				return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
 			}
 		} else {
-			break
+			if usageModified {
+				var bodyMap map[string]interface{}
+				err = common.Unmarshal(responseBody, &bodyMap)
+				if err != nil {
+					return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+				}
+				bodyMap["usage"] = simpleResponse.Usage
+				responseBody, _ = common.Marshal(bodyMap)
+			}
+			if forceFormat {
+				responseBody, err = common.Marshal(simpleResponse)
+				if err != nil {
+					return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
+				}
+			} else {
+				break
+			}
 		}
 	case types.RelayFormatClaude:
 		convertResult, err := service.ConvertResponse(c, info, types.RelayFormatClaude, &simpleResponse)
@@ -350,6 +370,10 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		}
 		responseBody = geminiRespStr
 	}
+
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// (content, reasoning, model field) before it reaches the client.
+	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
 
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 

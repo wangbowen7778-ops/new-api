@@ -10,3 +10,5 @@ docs
 /web/node_modules
 /web/dist
 !THIRD-PARTY-LICENSES.md
+!ShwllAPI使用文档.md
+!docs/images/shwll-api

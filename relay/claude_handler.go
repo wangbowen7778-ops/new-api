@@ -42,6 +42,10 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		return newConvertRequestFailedError(c, info, err)
 	}
 
+	// Model mapping disguise: establish the claimed identity in the outbound
+	// request so the model confidently self-identifies as the alias model.
+	helper.ApplyModelIdentityPrompt(info, request)
+
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())

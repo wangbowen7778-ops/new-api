@@ -26,7 +26,7 @@ import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { useHomePageContent } from './hooks'
-import { VideoHeroLanding } from './landing'
+import { LandingPage } from './landing'
 
 export function Home() {
   const { i18n, t } = useTranslation()
@@ -119,5 +119,5 @@ export function Home() {
     )
   }
 
-  return <VideoHeroLanding isAuthenticated={isAuthenticated} />
+  return <LandingPage isAuthenticated={isAuthenticated} />
 }

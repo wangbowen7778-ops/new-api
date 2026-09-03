@@ -12,12 +12,24 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 
 	"github.com/gin-gonic/gin"
 )
+
+func isNoThinkingRequest(req *dto.GeminiChatRequest) bool {
+	if req.GenerationConfig.ThinkingConfig != nil && req.GenerationConfig.ThinkingConfig.ThinkingBudget != nil {
+		configBudget := req.GenerationConfig.ThinkingConfig.ThinkingBudget
+		if configBudget != nil && *configBudget == 0 {
+			// 如果思考预算为 0，则认为是非思考请求
+			return true
+		}
+	}
+	return false
+}
 
 func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
@@ -37,8 +49,29 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
-	if err = helper.ApplyReasoningModelSuffix(info, request); err != nil {
-		return newConvertRequestFailedError(c, info, err)
+
+	// Model mapping disguise: establish the claimed identity in the outbound
+	// request so the model confidently self-identifies as the alias model.
+	helper.ApplyModelIdentityPrompt(info, request)
+
+	if model_setting.GetGeminiSettings().ThinkingAdapterEnabled {
+		if isNoThinkingRequest(request) {
+			// check is thinking
+			if !strings.Contains(info.OriginModelName, "-nothinking") {
+				// try to get no thinking model price
+				noThinkingModelName := info.OriginModelName + "-nothinking"
+				containPrice := helper.HasModelBillingConfig(noThinkingModelName)
+				if containPrice {
+					info.OriginModelName = noThinkingModelName
+					info.UpstreamModelName = noThinkingModelName
+				}
+			}
+		}
+		if request.GenerationConfig.ThinkingConfig == nil {
+			if err := relayconvert.ApplyGeminiThinkingConfigChecked(request, info); err != nil {
+				return types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+			}
+		}
 	}
 
 	adaptor := GetAdaptor(info.ApiType)

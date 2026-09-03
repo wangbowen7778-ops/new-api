@@ -71,6 +71,9 @@ func GeminiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 	}
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// (text, reasoning, model) before it reaches the client.
+	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 	return &usage, nil
 }

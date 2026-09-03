@@ -47,6 +47,10 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		return newConvertRequestFailedError(c, info, err)
 	}
 
+	// Model mapping disguise: establish the claimed identity in the outbound
+	// request so the model confidently self-identifies as the alias model.
+	helper.ApplyModelIdentityPrompt(info, request)
+
 	includeUsage := true
 	// 判断用户是否需要返回使用情况
 	if request.StreamOptions != nil {

@@ -430,6 +430,9 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 		break
 	}
 
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// (text, thoughts, model) before it reaches the client.
+	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &usage, nil

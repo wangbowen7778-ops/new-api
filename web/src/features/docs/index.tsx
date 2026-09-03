@@ -205,7 +205,7 @@ export function DocsPage() {
   }
 
   const renderSidebar = (): ReactNode => (
-    <aside className='top-20 hidden h-fit max-h-[calc(100vh-6rem)] w-60 shrink-0 overflow-y-auto pr-2 lg:sticky lg:block'>
+    <aside className='bg-card/50 border-border/70 top-20 hidden h-fit max-h-[calc(100vh-6rem)] w-60 shrink-0 overflow-y-auto rounded-xl border p-3 pr-2 shadow-sm lg:sticky lg:block'>
       <p className='text-muted-foreground mb-3 px-3 text-xs font-semibold tracking-widest uppercase'>
         {t('Table of Contents')}
       </p>
@@ -282,14 +282,14 @@ export function DocsPage() {
     <PublicLayout>
       <div
         ref={layoutRef}
-        className='mx-auto flex w-full max-w-6xl gap-8 px-4 py-8'
+        className='mx-auto flex w-full max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:px-8'
       >
         {renderSidebar()}
         <div className='min-w-0 flex-1'>
           <div
             ref={contentRef}
             onClick={handleContainerClick}
-            className='[&_h1]:scroll-mt-20 [&_h2]:scroll-mt-24 [&_h3]:scroll-mt-24 [&_img]:cursor-zoom-in'
+            className='bg-card border-border/70 rounded-2xl border px-5 py-7 shadow-sm sm:px-8 sm:py-10 lg:px-12 [&_h1]:scroll-mt-20 [&_h2]:scroll-mt-24 [&_h3]:scroll-mt-24 [&_img]:cursor-zoom-in'
           >
             <Markdown>{content}</Markdown>
           </div>

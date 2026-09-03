@@ -33,7 +33,7 @@ interface LandingNavbarProps {
 
 interface NavLinkItem {
   label: string
-  to: '/pricing' | '/dashboard' | '/sign-in'
+  to: '/pricing' | '/docs' | '/about'
 }
 
 export function LandingNavbar({ brand, isAuthenticated }: LandingNavbarProps) {
@@ -57,11 +57,8 @@ export function LandingNavbar({ brand, isAuthenticated }: LandingNavbarProps) {
 
   const centerLinks: NavLinkItem[] = [
     { label: t('Pricing'), to: '/pricing' },
-    { label: t('Console'), to: '/dashboard' },
-    {
-      label: isAuthenticated ? t('Dashboard') : t('Sign in'),
-      to: isAuthenticated ? '/dashboard' : '/sign-in',
-    },
+    { label: t('Docs'), to: '/docs' },
+    { label: t('About'), to: '/about' },
   ]
 
   const cta = {
@@ -71,32 +68,34 @@ export function LandingNavbar({ brand, isAuthenticated }: LandingNavbarProps) {
 
   return (
     <>
-      <header className='fixed inset-x-0 top-0 z-50 flex items-center justify-between px-6 py-5 md:grid md:grid-cols-[1fr_auto_1fr] md:px-12'>
+      <header className='fixed inset-x-0 top-0 z-50 flex min-h-18 items-center justify-between border-b border-[#101828]/7 bg-[#f8faff]/80 px-5 backdrop-blur-xl sm:px-8 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-10'>
         {/* Left column — the configured system name as the brand */}
         <Link
           to='/'
-          className='landing-font-brand justify-self-start text-base text-white'
+          className='landing-font-brand justify-self-start text-lg text-[#101828]'
         >
           {brand}
         </Link>
 
         {/* Desktop center nav — the middle `auto` grid column keeps it centered
          * on the viewport regardless of brand / right-group widths. */}
-        <nav className='hidden items-center gap-12 md:flex'>
+        <nav className='hidden items-center gap-9 md:flex'>
           {centerLinks.map((item) => (
             <Link
               key={item.label}
               to={item.to}
-              className='text-sm tracking-wide text-white/80 transition-colors duration-200 hover:text-white'
+              className='text-sm font-medium text-[#667085] transition-colors duration-200 hover:text-[#101828]'
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        {/* Desktop right — language toggle only; the CTA lives in the hero */}
-        <div className='hidden items-center justify-self-end md:flex'>
+        <div className='hidden items-center justify-self-end gap-4 md:flex'>
           <LanguageToggle />
+          <Link className='landing-nav-cta' to={cta.to}>
+            {cta.label}
+          </Link>
         </div>
 
         {/* Mobile right */}
@@ -113,20 +112,20 @@ export function LandingNavbar({ brand, isAuthenticated }: LandingNavbarProps) {
             <div className='relative size-4'>
               <span
                 className={cn(
-                  'absolute inset-x-0 top-[1px] h-[1.5px] rounded-full bg-white transition-all duration-300',
+                  'absolute inset-x-0 top-[1px] h-[1.5px] rounded-full bg-[#1d1d1f] transition-all duration-300',
                   menuEase,
                   open ? 'translate-y-[9px] rotate-45' : ''
                 )}
               />
               <span
                 className={cn(
-                  'absolute inset-x-0 top-[7px] h-[1.5px] rounded-full bg-white transition-all duration-300',
+                  'absolute inset-x-0 top-[7px] h-[1.5px] rounded-full bg-[#1d1d1f] transition-all duration-300',
                   open ? 'scale-0 opacity-0' : ''
                 )}
               />
               <span
                 className={cn(
-                  'absolute inset-x-0 top-[13px] h-[1.5px] rounded-full bg-white transition-all duration-300',
+                  'absolute inset-x-0 top-[13px] h-[1.5px] rounded-full bg-[#1d1d1f] transition-all duration-300',
                   menuEase,
                   open ? '-translate-y-[9px] -rotate-45' : ''
                 )}
@@ -148,13 +147,13 @@ export function LandingNavbar({ brand, isAuthenticated }: LandingNavbarProps) {
           aria-hidden
           onClick={close}
           className={cn(
-            'absolute inset-0 bg-black/40 transition-opacity duration-300',
+            'absolute inset-0 bg-black/20 transition-opacity duration-300',
             open ? 'opacity-100' : 'opacity-0'
           )}
         />
         <div
           className={cn(
-            'absolute right-0 top-0 h-full w-[85%] max-w-[340px] border-l border-white/10 bg-[#0a0608]/95 backdrop-blur-xl',
+            'absolute top-0 right-0 h-full w-[85%] max-w-[340px] border-l border-[#101828]/7 bg-[#f8faff]/97 backdrop-blur-xl',
             'transition-transform duration-300',
             menuEase,
             open ? 'translate-x-0' : 'translate-x-full'
@@ -166,7 +165,7 @@ export function LandingNavbar({ brand, isAuthenticated }: LandingNavbarProps) {
                 key={item.label}
                 to={item.to}
                 onClick={close}
-                className='text-lg text-white/85 transition-all duration-300 hover:text-white'
+                className='text-lg text-[#1d1d1f]/85 transition-all duration-300 hover:text-[#1d1d1f]'
                 style={{
                   transitionDelay: open ? `${150 + index * 75}ms` : '0ms',
                   opacity: open ? 1 : 0,
@@ -181,7 +180,7 @@ export function LandingNavbar({ brand, isAuthenticated }: LandingNavbarProps) {
             <Link
               to={cta.to}
               onClick={close}
-              className='landing-btn-primary button-glow block w-full text-center focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0608] focus-visible:outline-none'
+              className='landing-btn-primary block w-full text-center focus-visible:ring-2 focus-visible:ring-[#0071e3]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f5f7] focus-visible:outline-none'
             >
               {cta.label}
             </Link>
