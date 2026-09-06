@@ -44,6 +44,7 @@ import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
+  getCacheHitRate,
   getTieredBillingSummary,
   hasAnyCacheTokens,
   parseLogOther,
@@ -675,6 +676,12 @@ export function useCommonLogsColumns(
         const cacheWriteTokens = hasSplitCache
           ? cacheWrite5m + cacheWrite1h
           : other?.cache_creation_tokens || 0
+        const cacheHitRate = getCacheHitRate(
+          promptTokens,
+          cacheReadTokens,
+          cacheWriteTokens,
+          other
+        )
 
         return (
           <div className='flex flex-col gap-0.5'>
@@ -687,6 +694,12 @@ export function useCommonLogsColumns(
                 {cacheReadTokens > 0 && (
                   <span className='text-muted-foreground/60'>
                     {t('Cache')}↓ {cacheReadTokens.toLocaleString()}
+                    {cacheHitRate != null && (
+                      <span className='font-medium'>
+                        {' '}
+                        ({(cacheHitRate * 100).toFixed(2)}%)
+                      </span>
+                    )}
                   </span>
                 )}
                 {cacheWriteTokens > 0 && (

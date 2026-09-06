@@ -331,6 +331,42 @@ export function hasAnyCacheTokens(
   )
 }
 
+/**
+ * Whether the log's token usage follows Anthropic semantics, where
+ * prompt_tokens excludes cache read/write tokens (they are reported
+ * separately), as opposed to OpenAI semantics where cached tokens are part of
+ * prompt_tokens. Newer logs carry usage_semantic explicitly; older Claude
+ * logs only have the `claude` marker.
+ */
+function isAnthropicUsageSemantic(other: LogOtherData | null | undefined) {
+  if (other?.usage_semantic) return other.usage_semantic === 'anthropic'
+  return other?.claude === true
+}
+
+/**
+ * Cache hit rate for a consume log as a 0–1 ratio. Returns null when the
+ * request performed no cache read (no meaningful hit rate) or the total input
+ * token count is zero.
+ *
+ * Denominator is the total input tokens, treating cache writes as misses:
+ * - OpenAI semantics: prompt_tokens already contains cached tokens.
+ * - Anthropic semantics: prompt_tokens excludes cache read/write tokens, so
+ *   both are added back in.
+ */
+export function getCacheHitRate(
+  promptTokens: number,
+  cacheReadTokens: number,
+  cacheWriteTokens: number,
+  other: LogOtherData | null | undefined
+): number | null {
+  if (cacheReadTokens <= 0) return null
+  const denominator = isAnthropicUsageSemantic(other)
+    ? promptTokens + cacheReadTokens + cacheWriteTokens
+    : promptTokens
+  if (denominator <= 0) return null
+  return cacheReadTokens / denominator
+}
+
 export function getTieredBillingSummary(
   other: LogOtherData | null
 ): TieredBillingSummary | null {
