@@ -233,7 +233,7 @@ func GeminiEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo) (newAPI
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
-	if err = helper.ApplyReasoningModelSuffix(info, req); err != nil {
+	if err = helper.ApplyReasoningModelSuffix(c, info, req); err != nil {
 		return newConvertRequestFailedError(c, info, err)
 	}
 
