@@ -308,6 +308,133 @@ func TestGeneralOpenAIRequestPreserveMessageLevelTools(t *testing.T) {
 	assert.Contains(t, meta.CombineText, "lookup_order")
 }
 
+func TestGeneralOpenAIRequestHoistMessageTools(t *testing.T) {
+	toolWeather := `{"type":"function","function":{"name":"get_weather","description":"Get the weather","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}}`
+	toolTime := `{"type":"function","function":{"name":"get_current_time","description":"Get the current time","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}`
+	toolDuplicate := `{"type":"function","function":{"name":"get_weather","description":"Duplicate top-level name","parameters":{"type":"object"}}}`
+	toolLookup := `{"type":"function","function":{"name":"lookup_order","parameters":{"type":"object"}}}`
+
+	t.Run("merges message tools into top-level and clears them", func(t *testing.T) {
+		raw := []byte(`{
+			"model":"kimi-k3",
+			"tool_choice":"required",
+			"tools":[` + toolWeather + `],
+			"messages":[
+				{"role":"system","content":"You are Kimi."},
+				{"role":"system","tools":[` + toolTime + `]},
+				{"role":"system","content":"","tools":[` + toolLookup + `]}
+			]
+		}`)
+		var req GeneralOpenAIRequest
+		require.NoError(t, kitutil.Unmarshal(raw, &req))
+
+		req.HoistMessageTools()
+
+		encoded, err := kitutil.Marshal(req)
+		require.NoError(t, err)
+		tools := gjson.GetBytes(encoded, "tools").Array()
+		require.Len(t, tools, 3)
+		assert.Equal(t, "get_weather", tools[0].Get("function.name").String())
+		assert.Equal(t, "get_current_time", tools[1].Get("function.name").String())
+		assert.Equal(t, "lookup_order", tools[2].Get("function.name").String())
+
+		messages := gjson.GetBytes(encoded, "messages").Array()
+		require.Len(t, messages, 3)
+		for i, message := range messages {
+			assert.False(t, message.Get("tools").Exists(), "message %d still has tools", i)
+		}
+		// Clearing message tools restores the ordinary content key on the
+		// empty-content tool-loading message.
+		assert.True(t, messages[2].Get("content").Exists())
+		assert.Equal(t, "", messages[2].Get("content").String())
+		assert.Equal(t, "required", gjson.GetBytes(encoded, "tool_choice").String())
+	})
+
+	t.Run("deduplicates by function name first occurrence wins", func(t *testing.T) {
+		raw := []byte(`{
+			"model":"kimi-k3",
+			"tools":[` + toolWeather + `],
+			"messages":[
+				{"role":"system","tools":[` + toolDuplicate + `,` + toolTime + `]}
+			]
+		}`)
+		var req GeneralOpenAIRequest
+		require.NoError(t, kitutil.Unmarshal(raw, &req))
+
+		req.HoistMessageTools()
+
+		encoded, err := kitutil.Marshal(req)
+		require.NoError(t, err)
+		tools := gjson.GetBytes(encoded, "tools").Array()
+		require.Len(t, tools, 2)
+		assert.Equal(t, "get_weather", tools[0].Get("function.name").String())
+		// Top-level definition kept, not overwritten by the message-level duplicate.
+		assert.Equal(t, "Get the weather", tools[0].Get("function.description").String())
+		assert.Equal(t, "get_current_time", tools[1].Get("function.name").String())
+	})
+
+	t.Run("creates top-level tools when nil", func(t *testing.T) {
+		raw := []byte(`{
+			"model":"kimi-k3",
+			"tool_choice":"required",
+			"messages":[
+				{"role":"system","tools":[` + toolTime + `]}
+			]
+		}`)
+		var req GeneralOpenAIRequest
+		require.NoError(t, kitutil.Unmarshal(raw, &req))
+		require.Nil(t, req.Tools)
+
+		req.HoistMessageTools()
+
+		encoded, err := kitutil.Marshal(req)
+		require.NoError(t, err)
+		tools := gjson.GetBytes(encoded, "tools").Array()
+		require.Len(t, tools, 1)
+		assert.Equal(t, "get_current_time", tools[0].Get("function.name").String())
+	})
+
+	t.Run("skips invalid json tools but still clears them", func(t *testing.T) {
+		raw := []byte(`{
+			"model":"kimi-k3",
+			"messages":[
+				{"role":"system","tools":"not-an-array"},
+				{"role":"system","content":"after"}
+			]
+		}`)
+		var req GeneralOpenAIRequest
+		require.NoError(t, kitutil.Unmarshal(raw, &req))
+
+		req.HoistMessageTools()
+
+		assert.Nil(t, req.Tools)
+		for i, message := range req.Messages {
+			assert.Nil(t, message.Tools, "message %d still has tools", i)
+		}
+	})
+
+	t.Run("no-op when no message has tools", func(t *testing.T) {
+		raw := []byte(`{
+			"model":"kimi-k3",
+			"tools":[` + toolWeather + `],
+			"messages":[
+				{"role":"system","content":"You are Kimi."},
+				{"role":"user","content":"hi"}
+			]
+		}`)
+		var req GeneralOpenAIRequest
+		require.NoError(t, kitutil.Unmarshal(raw, &req))
+		before, err := kitutil.Marshal(req)
+		require.NoError(t, err)
+
+		req.HoistMessageTools()
+
+		after, err := kitutil.Marshal(req)
+		require.NoError(t, err)
+		assert.JSONEq(t, gjson.ParseBytes(before).Raw, gjson.ParseBytes(after).Raw)
+	})
+}
+
 func TestSGLangRequestExtensionsRoundTrip(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

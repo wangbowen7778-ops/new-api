@@ -209,6 +209,80 @@ func TestTextRequestViaResponsesConvertsClaudeDirectly(t *testing.T) {
 	assert.Equal(t, "ok", response.Content[0].GetText())
 }
 
+func TestTextRequestViaResponsesCarriesHoistedTools(t *testing.T) {
+	type capturedRequest struct {
+		path string
+		body []byte
+	}
+	captured := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		captured <- capturedRequest{path: r.URL.Path, body: body}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id":"resp_1",
+			"object":"response",
+			"status":"completed",
+			"model":"kimi-k3",
+			"output":[{"type":"message","id":"msg_1","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],
+			"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}
+		}`))
+	}))
+	defer server.Close()
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	info := &relaycommon.RelayInfo{
+		RelayMode:       relayconstant.RelayModeChatCompletions,
+		RelayFormat:     relaytypes.RelayFormatOpenAI,
+		OriginModelName: "kimi-k3",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:    constant.ChannelTypeOpenAI,
+			ChannelBaseUrl: server.URL,
+			ApiKey:         "test-key",
+			ChannelSetting: dto.ChannelSettings{HoistMessageTools: true},
+		},
+	}
+	adaptor := &openaichannel.Adaptor{}
+	adaptor.Init(info)
+	request := &dto.GeneralOpenAIRequest{
+		Model:      "kimi-k3",
+		ToolChoice: json.RawMessage(`"required"`),
+		Messages: []dto.Message{
+			{Role: "user", Content: "What time is it in Beijing?"},
+			{Role: "system", Tools: json.RawMessage(`[{"type":"function","function":{"name":"get_current_time","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}}]`)},
+		},
+	}
+
+	// TextHelper hoists before the via-responses conversion runs.
+	request.HoistMessageTools()
+
+	usage, apiErr := textRequestViaResponses(c, info, adaptor, request)
+
+	require.Nil(t, apiErr)
+	require.NotNil(t, usage)
+	assert.Equal(t, 5, usage.TotalTokens)
+
+	upstream := <-captured
+	assert.Equal(t, "/v1/responses", upstream.path)
+	var upstreamBody map[string]any
+	require.NoError(t, common.Unmarshal(upstream.body, &upstreamBody))
+	tools, ok := upstreamBody["tools"].([]any)
+	require.True(t, ok, "upstream responses request should carry top-level tools")
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "get_current_time", tool["name"])
+}
+
 func TestApplySystemPromptIfNeededSkipsToolLoadingMessages(t *testing.T) {
 	tools := json.RawMessage(`[{"type":"function","function":{"name":"get_current_time","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}}]`)
 	toolLoading := dto.Message{Role: "system", Tools: tools}

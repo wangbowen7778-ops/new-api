@@ -51,6 +51,10 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 	// request so the model confidently self-identifies as the alias model.
 	helper.ApplyModelIdentityPrompt(info, request)
 
+	if info.ChannelSetting.HoistMessageTools {
+		request.HoistMessageTools()
+	}
+
 	includeUsage := true
 	// 判断用户是否需要返回使用情况
 	if request.StreamOptions != nil {

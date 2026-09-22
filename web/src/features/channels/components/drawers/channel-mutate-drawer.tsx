@@ -301,6 +301,7 @@ const SENSITIVE_FORM_FIELDS = [
   'http2_connection_shards',
   'pass_through_body_enabled',
   'responses_websocket_enabled',
+  'hoist_message_tools',
   'system_prompt',
   'system_prompt_override',
   'allow_service_tier',
@@ -1850,6 +1851,32 @@ export function ChannelMutateDrawer({
             <FormLabel>{t('System Prompt Concatenation')}</FormLabel>
             <FormDescription>
               {t('Concatenate channel system prompt with user&apos;s prompt')}
+            </FormDescription>
+          </div>
+          <FormControl>
+            <Switch
+              disabled={sensitiveLocked}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+
+  const hoistMessageToolsFields = (
+    <FormField
+      control={form.control}
+      name='hoist_message_tools'
+      render={({ field }) => (
+        <FormItem className='flex items-center justify-between'>
+          <div className='space-y-0.5'>
+            <FormLabel>{t('Hoist message-level tools')}</FormLabel>
+            <FormDescription>
+              {t(
+                'Merge tools declared on messages into the top-level tools field for upstreams that do not support message-level tools'
+              )}
             </FormDescription>
           </div>
           <FormControl>
@@ -4662,6 +4689,7 @@ export function ChannelMutateDrawer({
                   passthroughFields}
                 {systemPromptFields}
                 {systemPromptOverrideFields}
+                {hoistMessageToolsFields}
               </fieldset>
             </div>
             {fieldPassthroughFields}

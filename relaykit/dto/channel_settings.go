@@ -29,6 +29,9 @@ type ChannelSettings struct {
 	// HTTPProtocol controls outbound HTTP version negotiation for this channel.
 	// Accepted values: "", "auto" (default), "http1".
 	HTTPProtocol string `json:"http_protocol,omitempty"`
+	// HoistMessageTools merges message-level tools (Kimi K3 dynamic tool loading)
+	// into the top-level tools array for upstreams that drop message-level tools.
+	HoistMessageTools bool `json:"hoist_message_tools,omitempty"`
 	// HTTP2ConnectionShards spreads HTTP/2 traffic across N independent transports
 	// (1-8). Zero/unset means 1. Ignored when HTTPProtocol is "http1".
 	HTTP2ConnectionShards int `json:"http2_connection_shards,omitempty"`

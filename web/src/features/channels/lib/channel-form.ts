@@ -268,6 +268,7 @@ export const channelFormSchema = z
       .refine(isOptionalProxyURL, ERROR_MESSAGES.INVALID_PROXY),
     http_protocol: z.enum(['auto', 'http1']).optional(),
     http2_connection_shards: z.number().int().optional(),
+    hoist_message_tools: z.boolean().optional(),
     pass_through_body_enabled: z.boolean().optional(),
     responses_websocket_enabled: z.boolean().optional(),
     system_prompt: z.string().optional(),
@@ -461,6 +462,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   http2_connection_shards: 1,
   pass_through_body_enabled: false,
   responses_websocket_enabled: false,
+  hoist_message_tools: false,
   system_prompt: '',
   system_prompt_override: false,
   // Type-specific settings
@@ -505,6 +507,7 @@ export function transformChannelToFormDefaults(
     http2_connection_shards: 1,
     pass_through_body_enabled: false,
     responses_websocket_enabled: false,
+    hoist_message_tools: false,
     system_prompt: '',
     system_prompt_override: false,
   }
@@ -527,6 +530,7 @@ export function transformChannelToFormDefaults(
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         responses_websocket_enabled:
           parsed.responses_websocket_enabled === true,
+        hoist_message_tools: parsed.hoist_message_tools === true,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
       }
@@ -661,6 +665,7 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
     responses_websocket_enabled:
       (formData.type === 1 || formData.type === 57) &&
       formData.responses_websocket_enabled === true,
+    hoist_message_tools: formData.hoist_message_tools === true,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
   }

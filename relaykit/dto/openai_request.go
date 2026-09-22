@@ -177,6 +177,44 @@ func (r GeneralOpenAIRequest) MarshalJSON() ([]byte, error) {
 	}{Alias: (*Alias)(&r), Messages: messages})
 }
 
+// HoistMessageTools merges message-level tool declarations (Kimi K3 dynamic
+// tool loading) into the top-level tools field and clears them from the
+// messages, for upstreams that only understand top-level tools. Tools are
+// deduplicated by function name, first occurrence wins.
+func (r *GeneralOpenAIRequest) HoistMessageTools() {
+	hasMessageTools := false
+	for _, message := range r.Messages {
+		if len(message.Tools) > 0 {
+			hasMessageTools = true
+			break
+		}
+	}
+	if !hasMessageTools {
+		return
+	}
+
+	seen := make(map[string]struct{}, len(r.Tools))
+	for _, tool := range r.Tools {
+		seen[tool.Function.Name] = struct{}{}
+	}
+	for i := range r.Messages {
+		if len(r.Messages[i].Tools) == 0 {
+			continue
+		}
+		var messageTools []ToolCallRequest
+		if err := kitutil.Unmarshal(r.Messages[i].Tools, &messageTools); err == nil {
+			for _, tool := range messageTools {
+				if _, ok := seen[tool.Function.Name]; ok {
+					continue
+				}
+				seen[tool.Function.Name] = struct{}{}
+				r.Tools = append(r.Tools, tool)
+			}
+		}
+		r.Messages[i].Tools = nil
+	}
+}
+
 func (r *GeneralOpenAIRequest) GetTokenCountMeta() *types.TokenCountMeta {
 	var tokenCountMeta types.TokenCountMeta
 	var texts = make([]string, 0)
