@@ -26,6 +26,8 @@ import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 
 interface MarkdownProps {
+  /** Resolve relative document links against their source, never the dashboard URL. */
+  baseUrl?: string
   breaks?: boolean
   children: string
   className?: string
@@ -738,7 +740,7 @@ const markdownParser = new Marked({
 
 markdownParser.use(...markdownExtensions)
 
-function addExternalLinkAttributes(html: string): string {
+function addExternalLinkAttributes(html: string, baseUrl?: string): string {
   if (typeof window === 'undefined') {
     return html
   }
@@ -748,31 +750,47 @@ function addExternalLinkAttributes(html: string): string {
 
   template.content.querySelectorAll('a[href]').forEach((link) => {
     const href = link.getAttribute('href') ?? ''
-    if (href.startsWith('#')) {
-      // In-page anchor: keep default (same-tab) navigation.
-      return
+    if (!href.startsWith('#')) {
+      // In-page anchors keep default same-tab navigation; other links resolve
+      // against their source baseUrl (when given) before opening externally.
+      if (baseUrl) {
+        try {
+          const url = new URL(href, baseUrl)
+          if (['http:', 'https:', 'mailto:'].includes(url.protocol)) {
+            link.setAttribute('href', url.href)
+          } else {
+            link.removeAttribute('href')
+          }
+        } catch {
+          link.removeAttribute('href')
+        }
+      }
+      link.setAttribute('target', '_blank')
+      link.setAttribute('rel', 'noopener noreferrer')
     }
-    link.setAttribute('target', '_blank')
-    link.setAttribute('rel', 'noopener noreferrer')
   })
 
   return template.innerHTML
 }
 
-function renderMarkdown(markdown: string, breaks = false): string {
+function renderMarkdown(
+  markdown: string,
+  breaks = false,
+  baseUrl?: string
+): string {
   const parsedHtml = markdownParser.parse(markdown, {
     ...markdownOptions,
     breaks,
   })
   const html = DOMPurify.sanitize(parsedHtml, sanitizeOptions)
 
-  return addExternalLinkAttributes(html)
+  return addExternalLinkAttributes(html, baseUrl)
 }
 
 export function Markdown(props: MarkdownProps) {
   const html = useMemo(
-    () => renderMarkdown(props.children, props.breaks),
-    [props.breaks, props.children]
+    () => renderMarkdown(props.children, props.breaks, props.baseUrl),
+    [props.breaks, props.children, props.baseUrl]
   )
 
   return (
