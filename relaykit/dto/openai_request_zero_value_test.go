@@ -339,14 +339,18 @@ func TestGeneralOpenAIRequestHoistMessageTools(t *testing.T) {
 		assert.Equal(t, "lookup_order", tools[2].Get("function.name").String())
 
 		messages := gjson.GetBytes(encoded, "messages").Array()
-		require.Len(t, messages, 3)
+		require.Len(t, messages, 2)
 		for i, message := range messages {
 			assert.False(t, message.Get("tools").Exists(), "message %d still has tools", i)
 		}
+		// The tools-only system message (no content at all) is removed entirely
+		// instead of being forwarded as a bare {"role":"system"} shell that
+		// upstreams reject with a missing-content 400.
+		assert.Equal(t, "You are Kimi.", messages[0].Get("content").String())
 		// Clearing message tools restores the ordinary content key on the
 		// empty-content tool-loading message.
-		assert.True(t, messages[2].Get("content").Exists())
-		assert.Equal(t, "", messages[2].Get("content").String())
+		assert.True(t, messages[1].Get("content").Exists())
+		assert.Equal(t, "", messages[1].Get("content").String())
 		assert.Equal(t, "required", gjson.GetBytes(encoded, "tool_choice").String())
 	})
 
@@ -394,7 +398,7 @@ func TestGeneralOpenAIRequestHoistMessageTools(t *testing.T) {
 		assert.Equal(t, "get_current_time", tools[0].Get("function.name").String())
 	})
 
-	t.Run("skips invalid json tools but still clears them", func(t *testing.T) {
+	t.Run("skips invalid json tools and drops the tools-only shell", func(t *testing.T) {
 		raw := []byte(`{
 			"model":"kimi-k3",
 			"messages":[
@@ -408,9 +412,10 @@ func TestGeneralOpenAIRequestHoistMessageTools(t *testing.T) {
 		req.HoistMessageTools()
 
 		assert.Nil(t, req.Tools)
-		for i, message := range req.Messages {
-			assert.Nil(t, message.Tools, "message %d still has tools", i)
-		}
+		// The invalid-tools message had no other payload, so removing its tools
+		// would leave an unforwardable bare role; it is dropped entirely.
+		require.Len(t, req.Messages, 1)
+		assert.Equal(t, "after", req.Messages[0].Content)
 	})
 
 	t.Run("no-op when no message has tools", func(t *testing.T) {

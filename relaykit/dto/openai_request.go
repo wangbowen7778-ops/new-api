@@ -180,7 +180,9 @@ func (r GeneralOpenAIRequest) MarshalJSON() ([]byte, error) {
 // HoistMessageTools merges message-level tool declarations (Kimi K3 dynamic
 // tool loading) into the top-level tools field and clears them from the
 // messages, for upstreams that only understand top-level tools. Tools are
-// deduplicated by function name, first occurrence wins.
+// deduplicated by function name, first occurrence wins. Messages that carried
+// only tools are removed entirely: upstreams require a content key on every
+// message, and a bare {"role":"system"} shell would be rejected.
 func (r *GeneralOpenAIRequest) HoistMessageTools() {
 	hasMessageTools := false
 	for _, message := range r.Messages {
@@ -197,8 +199,10 @@ func (r *GeneralOpenAIRequest) HoistMessageTools() {
 	for _, tool := range r.Tools {
 		seen[tool.Function.Name] = struct{}{}
 	}
+	messages := make([]Message, 0, len(r.Messages))
 	for i := range r.Messages {
 		if len(r.Messages[i].Tools) == 0 {
+			messages = append(messages, r.Messages[i])
 			continue
 		}
 		var messageTools []ToolCallRequest
@@ -211,8 +215,18 @@ func (r *GeneralOpenAIRequest) HoistMessageTools() {
 				r.Tools = append(r.Tools, tool)
 			}
 		}
-		r.Messages[i].Tools = nil
+		if !r.Messages[i].isEmptyAfterToolsCleared() {
+			r.Messages[i].Tools = nil
+			messages = append(messages, r.Messages[i])
+		}
 	}
+	r.Messages = messages
+}
+
+func (m *Message) isEmptyAfterToolsCleared() bool {
+	return m.Content == nil && m.Name == nil && m.Prefix == nil &&
+		m.ReasoningContent == nil && m.Reasoning == nil &&
+		len(m.ToolCalls) == 0 && m.ToolCallId == "" && len(m.Annotations) == 0
 }
 
 func (r *GeneralOpenAIRequest) GetTokenCountMeta() *types.TokenCountMeta {
