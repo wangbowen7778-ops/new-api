@@ -158,7 +158,6 @@
     "24 Hours": "24時間",
     "24 hours ago": "24時間前",
     "29 Days": "29日",
-    "2xx, 504 and 524 are always excluded.": "2xx・504・524 は常に除外されます。",
     "3. Enter your Gotify server URL and token above": "3. 上記にGotifyサーバーのURLとトークンを入力します",
     "3. Review mappings": "3. マッピングを確認",
     "30 days": "30 日",
@@ -553,6 +552,7 @@
     "Anthropic Messages to OpenAI Responses": "Anthropic Messages から OpenAI Responses",
     "Any condition": "いずれかを満たす",
     "Any Match (OR)": "いずれか一致（OR）",
+    "Any status not listed switches to another channel.": "一覧にないステータスは別のチャネルに切り替えます。",
     "Anyone can publish an index. A plugin installed from a third-party source has the same access as one you upload by hand: review its source before installing.": "インデックスは誰でも公開できます。サードパーティのソースからインストールしたプラグインは、手動でアップロードしたものと全く同じ権限を持ちます。インストール前にソースを確認してください。",
     "API": "API",
     "API Access": "API アクセス",
@@ -1535,6 +1535,8 @@
     "Conversation cleared": "会話を消去しました",
     "Conversion rate from USD to your custom currency": "USDからカスタム通貨への換算レート",
     "Convert reasoning_content to <think> tag in content": "content内のreasoning_contentを<think>タグに変換",
+    "Video Parsing": "動画解析",
+    "Route requests containing video content exclusively to channels with this switch enabled": "動画コンテンツを含むリクエストを、このスイッチが有効なチャネルにのみルーティングします",
     "Convert string to lowercase": "文字列を小文字に変換",
     "Convert string to uppercase": "文字列を大文字に変換",
     "Convert to expression": "式に変換",
@@ -5475,6 +5477,8 @@
     "Revoked an access token": "アクセストークンを取り消しました",
     "Rewards will be added directly to your balance": "報酬は直接残高に追加されます",
     "Rewrite callback URLs to the local server": "コールバック URL をローカルサーバーに書き換え",
+    "Rewrite response model": "レスポンスのモデルを書き換え",
+    "Rewrite the model field of every response to the model the client requested, leaving all other bytes untouched": "各レスポンスの model フィールドをクライアントが要求したモデル名に置き換え、それ以外の内容は変更しません",
     "Right to Left": "右から左",
     "Role": "ロール",
     "Roleplay": "ロールプレイ",
@@ -7452,6 +7456,8 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Max Concurrent Requests": "最大同時リクエスト数",
+    "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "このチャネルで同時に処理できるリクエストの上限。0 は無制限。"
   }
 }

@@ -341,3 +341,57 @@ func TestSharedEndpointRebindsToBoundNewAPIExtension(t *testing.T) {
 	assert.Equal(t, "alpha", c.GetString("task_plugin_key"), "the first bound candidate executes regardless of the earlier pin")
 	assert.Equal(t, "alpha", c.MustGet(jsplugin.ContextKeyPinnedEndpoint).(jsplugin.PinnedEndpoint).Plugin.Meta.Key)
 }
+
+func TestBodyContainsVideoPart(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{
+			name: "video_url part detected",
+			body: `{"model":"kimi-k3","messages":[{"role":"user","content":[{"type":"video_url","video_url":{"url":"data:video/mp4;base64,AAAA"}},{"type":"text","text":"describe"}]}]}`,
+			want: true,
+		},
+		{
+			name: "image only content not detected",
+			body: `{"model":"gpt-4o","messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}},{"type":"text","text":"hi"}]}]}`,
+			want: false,
+		},
+		{
+			name: "plain string content not detected",
+			body: `{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`,
+			want: false,
+		},
+		{
+			name: "null content not detected",
+			body: `{"model":"gpt-4o","messages":[{"role":"assistant","content":null}]}`,
+			want: false,
+		},
+		{
+			name: "base64 video part in later message detected",
+			body: `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"},{"role":"user","content":[{"type":"video_url","video_url":{"url":"data:video/mp4;base64,AAAA"}}]}]}`,
+			want: true,
+		},
+		{
+			name: "http video_url link not treated as video",
+			body: `{"model":"gpt-4o","messages":[{"role":"user","content":[{"type":"video_url","video_url":{"url":"https://example.com/v.mp4"}}]}]}`,
+			want: false,
+		},
+		{
+			name: "no messages key",
+			body: `{"model":"gpt-4o"}`,
+			want: false,
+		},
+		{
+			name: "claude style image block not detected",
+			body: `{"model":"claude","messages":[{"role":"user","content":[{"type":"image","source":{"type":"base64","data":"AAAA"}}]}]}`,
+			want: false,
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, bodyContainsVideoPart([]byte(testCase.body)))
+		})
+	}
+}

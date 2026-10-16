@@ -23,6 +23,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -156,11 +157,29 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 
-	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
+	// A failing upstream attempt switches to another channel of the same model,
+	// overrunning the retry budget (common.RetryTimes) the same way the
+	// concurrency-429 probe loop does. The budget is one probe per priority
+	// tier, cycling the tier index so every tier is probed, plus — for a
+	// concurrency 429 specifically — one probe per
+	// ConcurrencyHighPriorityWaitWindow interval at the top tier (fast-but-small
+	// channels free slots continuously, so waiting for one beats running on a
+	// slow tier). The request settles once the budget is exhausted. -1 marks the
+	// budget as not yet initialized; 0 means exhausted.
+	switchBudget := int64(-1)
+	switchProbe := 0
+	tierCount := 0
+	for ; retryParam.GetRetry() <= common.RetryTimes || switchBudget > 0; retryParam.IncreaseRetry() {
+		if retryParam.GetRetry() > common.RetryTimes && switchBudget > 0 {
+			switchBudget--
+		}
 		relayInfo.StreamStatus = nil
 		relayInfo.PerformanceBusinessRejection = false
 		relayInfo.PerformanceOutputTokens = 0
 		relayInfo.RetryIndex = retryParam.GetRetry()
+		if retryParam.GetRetry() > 0 {
+			time.Sleep(common.ConcurrencyRetryInterval)
+		}
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
@@ -185,16 +204,36 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
-		switch relayFormat {
-		case types.RelayFormatOpenAIRealtime:
-			newAPIError = relay.WssHelper(c, relayInfo)
-		case types.RelayFormatClaude:
-			newAPIError = relay.ClaudeHelper(c, relayInfo)
-		case types.RelayFormatGemini:
-			newAPIError = geminiRelayHandler(c, relayInfo)
-		default:
-			newAPIError = relayHandler(c, relayInfo)
+		runAttempt := func() *types.NewAPIError {
+			channelSettings, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
+			release, ok := service.AcquireChannelConcurrency(channel.Id, int64(channelSettings.MaxConcurrentRequests))
+			if !ok {
+				// Status 429 keeps the retry loop switching to another channel;
+				// the code must stay a non-"channel:" error so the channel is
+				// never auto-disabled, the message must not leak channel info,
+				// and the error log is skipped so ordinary users never see the
+				// internal retry/probe trail in their log page.
+				return types.NewErrorWithStatusCode(
+					errors.New(i18n.T(c, i18n.MsgChannelConcurrencyLimit)),
+					types.ErrorCodeConcurrencyLimit,
+					http.StatusTooManyRequests,
+					types.ErrOptionWithNoRecordErrorLog(),
+				)
+			}
+			defer release()
+
+			switch relayFormat {
+			case types.RelayFormatOpenAIRealtime:
+				return relay.WssHelper(c, relayInfo)
+			case types.RelayFormatClaude:
+				return relay.ClaudeHelper(c, relayInfo)
+			case types.RelayFormatGemini:
+				return geminiRelayHandler(c, relayInfo)
+			default:
+				return relayHandler(c, relayInfo)
+			}
 		}
+		newAPIError = runAttempt()
 
 		if newAPIError == nil {
 			service.MarkRequestPolicySuccess(c, relayInfo.StreamStatus)
@@ -206,6 +245,64 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		decision := service.DecideRelayRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry())
+		if newAPIError.GetErrorCode() == types.ErrorCodeConcurrencyLimit {
+			// Probe budget = wait-window probes at the top tier + one probe
+			// per lower tier. While the window lasts, the tier index stays at
+			// 0 so freed slots on fast high-priority channels win the probe;
+			// once it expires, the index cycles across the remaining tiers so
+			// every tier gets probed before the request settles with a 429.
+			if switchBudget < 0 {
+				tierCount = model.MaxConcurrencyRetryProbes(
+					common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
+					relayInfo.OriginModelName,
+					service.GetChannelConstraints(c).Filters,
+				)
+				if tierCount <= 0 {
+					tierCount = 1
+				}
+				switchBudget = int64(tierCount)
+				if windowProbes := int64(common.ConcurrencyHighPriorityWaitWindow / common.ConcurrencyRetryInterval); windowProbes > 0 {
+					switchBudget += windowProbes
+				}
+			}
+			probeIndex := int64(0)
+			if switchBudget > 0 {
+				probeIndex = switchBudget - 1
+			}
+			windowProbes := int64(common.ConcurrencyHighPriorityWaitWindow / common.ConcurrencyRetryInterval)
+			var tier int
+			if windowProbes > 0 && probeIndex >= windowProbes {
+				tier = int((probeIndex - windowProbes) % int64(tierCount))
+			}
+			retryParam.TierOverride = &tier
+			retryParam.PriorityFloor = 0
+			decision = service.PolicyDecision{Action: "retry", Reason: "channel_concurrency_limit", Source: "system"}
+		} else if decision.Action == "retry" && retryParam.GetRetry() >= common.RetryTimes {
+			// Any other switch-worthy failure (any non-2xx upstream status or
+			// channel error) keeps moving to another channel of the same model
+			// past the retry budget, the same way the concurrency probe does:
+			// one probe per priority tier, cycling the tier index so every
+			// candidate tier is revisited before the request settles on the
+			// error.
+			if switchBudget < 0 {
+				tierCount = max(model.MaxConcurrencyRetryProbes(
+					common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
+					relayInfo.OriginModelName,
+					service.GetChannelConstraints(c).Filters,
+				), 1)
+				switchBudget = int64(tierCount)
+			}
+			tier := switchProbe % tierCount
+			switchProbe++
+			retryParam.TierOverride = &tier
+			retryParam.PriorityFloor = 0
+		} else {
+			// A real failure moved the attempt counter down the tiers; keep
+			// probing from the reached tier until a concurrency probe resets
+			// the floor or the switch budget runs out.
+			retryParam.TierOverride = nil
+			retryParam.PriorityFloor = retryParam.GetRetry()
+		}
 		service.RecordPolicyFailure(c, channel.Id, newAPIError, decision)
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
 
@@ -261,6 +358,12 @@ var upgrader = websocket.Upgrader{
 }
 
 func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {
+	// The nil-ChannelMeta branch is the first attempt: the distributor already
+	// picked a channel (affinity/pin aware). InitChannelMeta marks it as done
+	// so later attempts always re-select — even when the handler never ran
+	// (e.g. a concurrency-limit 429 rejects the attempt before the handler
+	// initializes the meta itself), otherwise every retry would be pinned to
+	// the same saturated channel.
 	if info.ChannelMeta == nil {
 		autoBan := c.GetBool("auto_ban")
 		autoBanInt := 1
@@ -274,6 +377,7 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			AutoBan: &autoBanInt,
 		}
 		service.RequestPolicy(c).BeginAttempt(channel, info.UsingGroup)
+		info.InitChannelMeta(c)
 		return channel, nil
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
@@ -291,6 +395,7 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	if newAPIError != nil {
 		return nil, newAPIError
 	}
+	info.InitChannelMeta(c)
 	return channel, nil
 }
 

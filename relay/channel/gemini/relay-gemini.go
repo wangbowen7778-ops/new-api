@@ -314,7 +314,7 @@ func GeminiChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *
 
 		response.Id = id
 		response.Created = createAt
-		response.Model = info.UpstreamModelName
+		response.Model = helper.MaskClaimedModel(info, info.UpstreamModelName)
 		if response.IsToolCall() {
 			finishReason = constant.FinishReasonToolCalls
 			if info.RelayFormat == types.RelayFormatClaude {
@@ -349,7 +349,7 @@ func GeminiChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *
 		logger.LogDebug(c, "info.SendResponseCount = %d", info.SendResponseCount)
 		if info.SendResponseCount == 0 {
 			// send first response
-			emptyResponse := helper.GenerateStartEmptyResponse(id, createAt, info.UpstreamModelName, nil)
+			emptyResponse := helper.GenerateStartEmptyResponse(id, createAt, helper.MaskClaimedModel(info, info.UpstreamModelName), nil)
 			// Claude message_start is emitted from this first OpenAI chunk.
 			// Carry upstream usage when the current Gemini frame provided it.
 			emptyResponse.Usage = response.Usage
@@ -387,7 +387,7 @@ func GeminiChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *
 		}
 		if isStop {
 			if info.RelayFormat != types.RelayFormatClaude {
-				_ = handleStream(c, info, helper.GenerateStopResponse(id, createAt, info.UpstreamModelName, finishReason))
+				_ = handleStream(c, info, helper.GenerateStopResponse(id, createAt, helper.MaskClaimedModel(info, info.UpstreamModelName), finishReason))
 			}
 		}
 		return true
@@ -397,9 +397,9 @@ func GeminiChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *
 		return usage, err
 	}
 
-	response := helper.GenerateFinalUsageResponse(id, createAt, info.UpstreamModelName, *usage)
+	response := helper.GenerateFinalUsageResponse(id, createAt, helper.MaskClaimedModel(info, info.UpstreamModelName), *usage)
 	if info.RelayFormat == types.RelayFormatClaude && info.ClaudeConvertInfo != nil && !info.ClaudeConvertInfo.Done {
-		response = helper.GenerateStopResponse(id, createAt, info.UpstreamModelName, finishReason)
+		response = helper.GenerateStopResponse(id, createAt, helper.MaskClaimedModel(info, info.UpstreamModelName), finishReason)
 		response.Usage = usage
 	}
 	handleErr := handleFinalStream(c, info, response)
@@ -463,7 +463,7 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 		return &usage, nil
 	}
 	fullTextResponse := responseGeminiChat2OpenAI(c, &geminiResponse)
-	fullTextResponse.Model = info.UpstreamModelName
+	fullTextResponse.Model = helper.MaskClaimedModel(info, info.UpstreamModelName)
 	usage := buildUsageFromGeminiResponse(c, info, &geminiResponse)
 
 	fullTextResponse.Usage = usage
@@ -489,8 +489,9 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	}
 
 	// Model mapping disguise: rewrite the real upstream model name in the body
-	// (text, thoughts, model) before it reaches the client.
-	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
+	// (text, thoughts, model) before it reaches the client; the channel's
+	// response-model rewrite switch is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &usage, nil
@@ -513,7 +514,7 @@ func GeminiEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	openAIResponse := dto.OpenAIEmbeddingResponse{
 		Object: "list",
 		Data:   make([]dto.OpenAIEmbeddingResponseItem, 0, len(geminiResponse.Embeddings)),
-		Model:  info.UpstreamModelName,
+		Model:  helper.MaskClaimedModel(info, info.UpstreamModelName),
 	}
 
 	for i, embedding := range geminiResponse.Embeddings {

@@ -125,8 +125,9 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		}
 		countClaudeStreamBillableTools(info, &claudeResponse)
 		// Model mapping disguise: rewrite the real upstream model name in the
-		// chunk (text, thinking, model) before it reaches the client.
-		data = helper.MaskModelText(info, data)
+		// chunk (text, thinking, model) before it reaches the client; the
+		// channel's response-model rewrite switch is honored in the same call.
+		data = helper.MaskResponseText(info, data)
 		helper.ClaudeChunkData(c, claudeResponse, data)
 	} else if info.RelayFormat == types.RelayFormatOpenAI {
 		state, err := claudeToChatStreamState(info)
@@ -165,7 +166,7 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 			return nil
 		}
 		countClaudeStreamBillableTools(info, &claudeResponse)
-		if sendErr := sendGeminiStreamResults(c, results); sendErr != nil {
+		if sendErr := sendGeminiStreamResults(c, info, results); sendErr != nil {
 			return sendErr
 		}
 	}
@@ -207,7 +208,7 @@ func claudeToGeminiStreamState(info *relaycommon.RelayInfo) (*relayconvert.Respo
 	return state, nil
 }
 
-func sendGeminiStreamResults(c *gin.Context, results []relayconvert.ResponseResult) *types.NewAPIError {
+func sendGeminiStreamResults(c *gin.Context, info *relaycommon.RelayInfo, results []relayconvert.ResponseResult) *types.NewAPIError {
 	for _, result := range results {
 		geminiResponse, ok := result.Value.(*dto.GeminiChatResponse)
 		if !ok {
@@ -220,7 +221,7 @@ func sendGeminiStreamResults(c *gin.Context, results []relayconvert.ResponseResu
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeBadResponseBody)
 		}
-		c.Render(-1, common.CustomEvent{Data: "data: " + string(data)})
+		c.Render(-1, common.CustomEvent{Data: "data: " + helper.MaskResponseText(info, string(data))})
 		_ = helper.FlushWriter(c)
 	}
 	return nil
@@ -312,7 +313,7 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 			common.SysLog(common.LogText("error finalizing Gemini stream response: %s", err.Error()))
 			return
 		}
-		if sendErr := sendGeminiStreamResults(c, results); sendErr != nil {
+		if sendErr := sendGeminiStreamResults(c, info, results); sendErr != nil {
 			common.SysLog(common.LogText("send final Gemini stream response failed: %s", sendErr.Error()))
 		}
 	}
@@ -431,8 +432,9 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	}
 
 	// Model mapping disguise: rewrite the real upstream model name in the body
-	// (text, thinking, model) before it reaches the client.
-	responseData = []byte(helper.MaskModelText(info, string(responseData)))
+	// (text, thinking, model) before it reaches the client; the channel's
+	// response-model rewrite switch is honored in the same call.
+	responseData = []byte(helper.MaskResponseText(info, string(responseData)))
 	service.IOCopyBytesGracefully(c, httpResp, responseData)
 	return nil
 }

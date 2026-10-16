@@ -52,8 +52,9 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	}
 
 	// Model mapping disguise: rewrite the real upstream model name in the body
-	// before it reaches the client.
-	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
+	// before it reaches the client; the channel's response-model rewrite switch
+	// is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 	return usage, nil
 }
@@ -131,7 +132,7 @@ func OaiResponsesToChatBufferedStreamHandler(c *gin.Context, info *relaycommon.R
 		finalResponse = &dto.OpenAIResponsesResponse{
 			ID:        helper.GetResponseID(c),
 			CreatedAt: dto.IntValue(time.Now().Unix()),
-			Model:     info.UpstreamModelName,
+			Model:     helper.MaskClaimedModel(info, info.UpstreamModelName),
 			Status:    []byte(`"completed"`),
 		}
 	}
@@ -147,8 +148,9 @@ func OaiResponsesToChatBufferedStreamHandler(c *gin.Context, info *relaycommon.R
 	}
 
 	// Model mapping disguise: rewrite the real upstream model name in the body
-	// before it reaches the client.
-	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
+	// before it reaches the client; the channel's response-model rewrite switch
+	// is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 	return usage, nil
 }
@@ -186,7 +188,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 	createAt := time.Now().Unix()
 	state, err := relayconvert.NewResponseStreamState(types.RelayFormatOpenAIResponses, info.RelayFormat, relayconvert.ResponseStreamOptions{
 		ID:      responseId,
-		Model:   info.UpstreamModelName,
+		Model:   helper.MaskClaimedModel(info, info.UpstreamModelName),
 		Created: createAt,
 	})
 	if err != nil {
@@ -223,7 +225,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			streamErr = types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 			return false
 		}
-		c.Render(-1, common.CustomEvent{Data: "data: " + helper.MaskModelText(info, string(geminiResponseStr))})
+		c.Render(-1, common.CustomEvent{Data: "data: " + helper.MaskResponseText(info, string(geminiResponseStr))})
 		_ = helper.FlushWriter(c)
 		return true
 	}

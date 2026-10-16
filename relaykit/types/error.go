@@ -59,6 +59,10 @@ const (
 	ErrorCodeChannelAwsClientError        ErrorCode = "channel:aws_client_error"
 	ErrorCodeChannelInvalidKey            ErrorCode = "channel:invalid_key"
 	ErrorCodeChannelResponseTimeExceeded  ErrorCode = "channel:response_time_exceeded"
+	// ErrorCodeConcurrencyLimit deliberately has no "channel:" prefix: a local
+	// concurrency rejection must retry via its status code but never count as a
+	// channel error, which would auto-disable the channel.
+	ErrorCodeConcurrencyLimit ErrorCode = "concurrency_limit"
 
 	// client request error
 	ErrorCodeReadRequestBodyFailed ErrorCode = "read_request_body_failed"

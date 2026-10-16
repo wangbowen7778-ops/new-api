@@ -480,6 +480,8 @@ export const FIELD_DESCRIPTIONS = {
     'For this channel, map the model name in client requests to the model name sent upstream.',
   PRIORITY: 'Higher priority channels are selected first',
   WEIGHT: 'Used for load balancing. Higher weight = more requests',
+  MAX_CONCURRENT_REQUESTS:
+    'Maximum concurrent in-flight requests for this channel. 0 = unlimited.',
   TEST_MODEL: 'Model to use when testing channel connectivity',
   AUTO_BAN: 'Automatically disable channel on repeated failures',
   STATUS_CODE_MAPPING: 'Map response status codes (JSON format)',

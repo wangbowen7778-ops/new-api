@@ -158,7 +158,6 @@
     "24 Hours": "24 heures",
     "24 hours ago": "Il y a 24 heures",
     "29 Days": "29 jours",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 et 524 sont toujours exclus.",
     "3. Enter your Gotify server URL and token above": "3. Saisissez l'URL de votre serveur Gotify et le jeton ci-dessus",
     "3. Review mappings": "3. Vérifier les correspondances",
     "30 days": "30 jours",
@@ -553,6 +552,7 @@
     "Anthropic Messages to OpenAI Responses": "Anthropic Messages vers OpenAI Responses",
     "Any condition": "Au moins une condition",
     "Any Match (OR)": "N'importe laquelle (OR)",
+    "Any status not listed switches to another channel.": "Tout statut non listé bascule vers un autre canal.",
     "Anyone can publish an index. A plugin installed from a third-party source has the same access as one you upload by hand: review its source before installing.": "N’importe qui peut publier un index. Un plugin installé depuis une source tierce a exactement les mêmes accès qu’un plugin importé à la main : examinez son code avant de l’installer.",
     "API": "API",
     "API Access": "Accès API",
@@ -1535,6 +1535,8 @@
     "Conversation cleared": "Conversation effacée",
     "Conversion rate from USD to your custom currency": "Taux de conversion de l'USD vers votre devise personnalisée",
     "Convert reasoning_content to <think> tag in content": "Convertir reasoning_content en balise <think> dans content",
+    "Video Parsing": "Analyse vidéo",
+    "Route requests containing video content exclusively to channels with this switch enabled": "Route les requêtes contenant du contenu vidéo exclusivement vers les canaux avec ce commutateur activé",
     "Convert string to lowercase": "Convertir la chaîne en minuscules",
     "Convert string to uppercase": "Convertir la chaîne en majuscules",
     "Convert to expression": "Convertir en expression",
@@ -5475,6 +5477,8 @@
     "Revoked an access token": "Jeton d’accès révoqué",
     "Rewards will be added directly to your balance": "Les récompenses seront ajoutées directement à votre solde",
     "Rewrite callback URLs to the local server": "Réécrire les URLs de callback vers le serveur local",
+    "Rewrite response model": "Réécrire le modèle de la réponse",
+    "Rewrite the model field of every response to the model the client requested, leaving all other bytes untouched": "Remplace le champ model de chaque réponse par le modèle demandé par le client, sans modifier le reste",
     "Right to Left": "De droite à gauche",
     "Role": "Rôle",
     "Roleplay": "Roleplay",
@@ -7452,6 +7456,8 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Max Concurrent Requests": "Requêtes simultanées max",
+    "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "Nombre maximal de requêtes simultanées pour ce canal. 0 = illimité."
   }
 }

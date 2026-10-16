@@ -8,6 +8,9 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // ModelMaskingEnabled reports whether a response must claim the user-requested
@@ -24,6 +27,55 @@ func ModelMaskingEnabled(info *relaycommon.RelayInfo) bool {
 		return false
 	}
 	return !strings.EqualFold(info.UpstreamModelName, info.OriginModelName)
+}
+
+// ResponseModelRewriteEnabled reports whether the channel opted in to
+// rewriting the response's model field to the model the client requested. It is
+// independent of model-mapping disguise: a channel may rewrite the model field
+// without also masking content, reasoning, or vendor names. No-op when the
+// client did not name a model.
+func ResponseModelRewriteEnabled(info *relaycommon.RelayInfo) bool {
+	if info == nil || info.ChannelMeta == nil || !info.ChannelSetting.RewriteResponseModel {
+		return false
+	}
+	return info.OriginModelName != ""
+}
+
+// responseModelJSONPaths are the response-envelope locations a model name may
+// occupy: OpenAI/Claude top-level, Gemini native modelVersion, and the nested
+// message/response objects of Claude and OpenAI Responses stream events.
+var responseModelJSONPaths = []string{"model", "modelVersion", "message.model", "response.model"}
+
+// RewriteResponseModelField rewrites only the model field of an already
+// serialized response body or stream frame to the client-requested model name,
+// leaving every other byte untouched. A field absent from the payload is not
+// added, and non-JSON input (e.g. a "[DONE]" sentinel) is returned unchanged.
+// No-op unless the channel enabled RewriteResponseModel.
+func RewriteResponseModelField(info *relaycommon.RelayInfo, text string) string {
+	if !ResponseModelRewriteEnabled(info) || text == "" {
+		return text
+	}
+	claimed := info.OriginModelName
+	for _, path := range responseModelJSONPaths {
+		if !gjson.Get(text, path).Exists() {
+			continue
+		}
+		patched, err := sjson.Set(text, path, claimed)
+		if err != nil {
+			continue
+		}
+		text = patched
+	}
+	return text
+}
+
+// MaskResponseText applies the structural model-field rewrite (channel
+// RewriteResponseModel switch) and, when model-mapping disguise is active, the
+// upstream-model text masking. A channel with neither active gets its input
+// back byte for byte. Every envelope write point routes through this so the two
+// behaviors compose in one place.
+func MaskResponseText(info *relaycommon.RelayInfo, text string) string {
+	return MaskModelText(info, RewriteResponseModelField(info, text))
 }
 
 // MaskModelText replaces occurrences of the real upstream model name in
@@ -85,10 +137,11 @@ func MaskModelText(info *relaycommon.RelayInfo, text string) string {
 }
 
 // MaskClaimedModel returns the model name a response envelope should present to
-// the user: the mapped (origin) name while masking is active, otherwise the
+// the user: the requested (mapped) name while model mapping disguise is active
+// or the channel opted into rewriting the response model, otherwise the
 // caller-supplied fallback (which is normally the real upstream model).
 func MaskClaimedModel(info *relaycommon.RelayInfo, fallback string) string {
-	if ModelMaskingEnabled(info) {
+	if ModelMaskingEnabled(info) || ResponseModelRewriteEnabled(info) {
 		return info.OriginModelName
 	}
 	if fallback != "" {
@@ -112,12 +165,19 @@ func StripReasoningContent(info *relaycommon.RelayInfo, resp *dto.OpenAITextResp
 }
 
 // MaskChatCompletionsStreamResponse masks one OpenAI chat stream chunk in
-// place: the model field, and the content/reasoning text of every choice delta.
+// place: the model field (while model mapping disguise or the response-model
+// rewrite is active), and the content/reasoning text of every choice delta
+// (masking only).
 func MaskChatCompletionsStreamResponse(info *relaycommon.RelayInfo, resp *dto.ChatCompletionsStreamResponse) {
-	if resp == nil || !ModelMaskingEnabled(info) {
+	if resp == nil {
 		return
 	}
-	resp.Model = MaskClaimedModel(info, resp.Model)
+	if ModelMaskingEnabled(info) || ResponseModelRewriteEnabled(info) {
+		resp.Model = MaskClaimedModel(info, resp.Model)
+	}
+	if !ModelMaskingEnabled(info) {
+		return
+	}
 	for i := range resp.Choices {
 		delta := &resp.Choices[i].Delta
 		if delta.Content != nil {
@@ -132,13 +192,20 @@ func MaskChatCompletionsStreamResponse(info *relaycommon.RelayInfo, resp *dto.Ch
 	}
 }
 
-// MaskClaudeResponse masks a Claude response in place: the model field and the
-// text/thinking of content blocks, the delta, and the message envelope.
+// MaskClaudeResponse masks a Claude response in place: the model field (while
+// model mapping disguise or the response-model rewrite is active) and, under
+// masking, the text/thinking of content blocks, the delta, and the message
+// envelope.
 func MaskClaudeResponse(info *relaycommon.RelayInfo, resp *dto.ClaudeResponse) {
-	if resp == nil || !ModelMaskingEnabled(info) {
+	if resp == nil {
 		return
 	}
-	resp.Model = MaskClaimedModel(info, resp.Model)
+	if ModelMaskingEnabled(info) || ResponseModelRewriteEnabled(info) {
+		resp.Model = MaskClaimedModel(info, resp.Model)
+	}
+	if !ModelMaskingEnabled(info) {
+		return
+	}
 	for i := range resp.Content {
 		maskClaudeMediaMessage(info, &resp.Content[i])
 	}

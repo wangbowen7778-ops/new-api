@@ -50,8 +50,9 @@ func GeminiTextGenerationHandler(c *gin.Context, info *relaycommon.RelayInfo, re
 	usage := buildUsageFromGeminiResponse(c, info, &geminiResponse)
 
 	// Model mapping disguise: rewrite the real upstream model name in the body
-	// (text, thoughts, model) before it reaches the client.
-	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
+	// (text, thoughts, model) before it reaches the client; the channel's
+	// response-model rewrite switch is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &usage, nil
@@ -92,7 +93,7 @@ func GeminiTextGenerationStreamHandler(c *gin.Context, info *relaycommon.RelayIn
 	helper.SetEventStreamHeaders(c)
 
 	return geminiStreamHandler(c, info, resp, func(data string, geminiResponse *dto.GeminiChatResponse) bool {
-		err := helper.StringData(c, helper.MaskModelText(info, data))
+		err := helper.StringData(c, helper.MaskResponseText(info, data))
 		if err != nil {
 			logger.LogError(c, common.LogText("failed to write stream data: %s", err.Error()))
 			return false

@@ -263,16 +263,19 @@ export const channelFormSchema = z
     // Channel extra settings (stored in setting JSON, not sent directly)
     force_format: z.boolean().optional(),
     thinking_to_content: z.boolean().optional(),
+    rewrite_response_model: z.boolean().optional(),
     proxy: z
       .string()
       .optional()
       .refine(isOptionalProxyURL, ERROR_MESSAGES.INVALID_PROXY),
     http_protocol: z.enum(['auto', 'http1']).optional(),
     http2_connection_shards: z.number().int().optional(),
+    max_concurrent_requests: z.number().int().min(0).max(100000).optional(),
     hoist_message_tools: z.boolean().optional(),
     tls_insecure_skip_verify: z.boolean().optional(),
     pass_through_body_enabled: z.boolean().optional(),
     responses_websocket_enabled: z.boolean().optional(),
+    video_parsing_enabled: z.boolean().optional(),
     system_prompt: z.string().optional(),
     system_prompt_override: z.boolean().optional(),
     // Type-specific settings (stored in settings JSON)
@@ -459,12 +462,15 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   // Channel extra settings
   force_format: false,
   thinking_to_content: false,
+  rewrite_response_model: false,
   proxy: '',
   http_protocol: HTTP_PROTOCOL_AUTO,
   http2_connection_shards: 1,
+  max_concurrent_requests: 0,
   tls_insecure_skip_verify: false,
   pass_through_body_enabled: false,
   responses_websocket_enabled: false,
+  video_parsing_enabled: false,
   hoist_message_tools: false,
   system_prompt: '',
   system_prompt_override: false,
@@ -505,12 +511,15 @@ export function transformChannelToFormDefaults(
     task_extend_plugin_keys: [] as string[],
     force_format: false,
     thinking_to_content: false,
+    rewrite_response_model: false,
     proxy: '',
     http_protocol: HTTP_PROTOCOL_AUTO as 'auto' | 'http1',
     http2_connection_shards: 1,
+    max_concurrent_requests: 0,
     tls_insecure_skip_verify: false,
     pass_through_body_enabled: false,
     responses_websocket_enabled: false,
+    video_parsing_enabled: false,
     hoist_message_tools: false,
     system_prompt: '',
     system_prompt_override: false,
@@ -528,13 +537,16 @@ export function transformChannelToFormDefaults(
         task_extend_plugin_keys: readTaskExtendPluginKeys(channel.type, parsed),
         force_format: parsed.force_format || false,
         thinking_to_content: parsed.thinking_to_content || false,
+        rewrite_response_model: parsed.rewrite_response_model === true,
         proxy: parsed.proxy || '',
         http_protocol: protocol,
         http2_connection_shards: protocol === HTTP_PROTOCOL_HTTP1 ? 1 : shards,
+        max_concurrent_requests: parsed.max_concurrent_requests || 0,
         tls_insecure_skip_verify: parsed.tls_insecure_skip_verify === true,
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         responses_websocket_enabled:
           parsed.responses_websocket_enabled === true,
+        video_parsing_enabled: parsed.video_parsing_enabled === true,
         hoist_message_tools: parsed.hoist_message_tools === true,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
@@ -663,6 +675,7 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
         : undefined,
     force_format: formData.force_format || false,
     thinking_to_content: formData.thinking_to_content || false,
+    rewrite_response_model: formData.rewrite_response_model === true,
     proxy: formData.proxy?.trim() || '',
     pass_through_body_enabled:
       formData.type !== CHANNEL_TYPE_ADVANCED_CUSTOM &&
@@ -670,6 +683,7 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
     responses_websocket_enabled:
       supportsResponsesWebSocket(formData.type) &&
       formData.responses_websocket_enabled === true,
+    video_parsing_enabled: formData.video_parsing_enabled === true,
     hoist_message_tools: formData.hoist_message_tools === true,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
@@ -689,6 +703,12 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
   }
   if (formData.tls_insecure_skip_verify === true) {
     settingObj.tls_insecure_skip_verify = true
+  }
+  const maxConcurrentRequests = formData.max_concurrent_requests ?? 0
+  if (maxConcurrentRequests > 0) {
+    settingObj.max_concurrent_requests = maxConcurrentRequests
+  } else if ('max_concurrent_requests' in settingObj) {
+    delete settingObj.max_concurrent_requests
   }
 
   return JSON.stringify(settingObj)

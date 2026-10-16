@@ -60,8 +60,9 @@ func OaiChatToResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	}
 
 	// Model mapping disguise: rewrite the real upstream model name in the body
-	// before it reaches the client.
-	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
+	// before it reaches the client; the channel's response-model rewrite switch
+	// is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 	return usage, nil
 }
@@ -75,7 +76,7 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 	responseID := helper.GetResponseID(c)
 	state, err := relayconvert.NewResponseStreamState(types.RelayFormatOpenAI, types.RelayFormatOpenAIResponses, relayconvert.ResponseStreamOptions{
 		ID:                 responseID,
-		Model:              info.UpstreamModelName,
+		Model:              helper.MaskClaimedModel(info, info.UpstreamModelName),
 		EmitSequenceNumber: true,
 	})
 	if err != nil {
@@ -92,7 +93,7 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			streamErr = types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 			return false
 		}
-		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, string(data)); err != nil {
+		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, helper.MaskResponseText(info, string(data))); err != nil {
 			// When the client went away the upstream already produced output,
 			// so the stream stops and settles normally instead of failing; any
 			// other write error stays a server error.

@@ -158,7 +158,6 @@
     "24 Hours": "24 giờ",
     "24 hours ago": "24 giờ trước",
     "29 Days": "29 ngày",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 và 524 luôn bị loại trừ.",
     "3. Enter your Gotify server URL and token above": "3. Nhập URL máy chủ Gotify và mã thông báo của bạn ở trên",
     "3. Review mappings": "3. Kiểm tra ánh xạ",
     "30 days": "30 ngày",
@@ -553,6 +552,7 @@
     "Anthropic Messages to OpenAI Responses": "Anthropic Messages sang OpenAI Responses",
     "Any condition": "Thỏa mãn bất kỳ",
     "Any Match (OR)": "Bất kỳ khớp (OR)",
+    "Any status not listed switches to another channel.": "Mọi mã trạng thái không có trong danh sách sẽ chuyển sang kênh khác.",
     "Anyone can publish an index. A plugin installed from a third-party source has the same access as one you upload by hand: review its source before installing.": "Bất kỳ ai cũng có thể công bố một chỉ mục. Plugin cài từ nguồn bên thứ ba có quyền truy cập hệt như plugin bạn tự tải lên: hãy xem mã nguồn trước khi cài.",
     "API": "API",
     "API Access": "Truy cập API",
@@ -1535,6 +1535,8 @@
     "Conversation cleared": "Đã xóa cuộc trò chuyện",
     "Conversion rate from USD to your custom currency": "Tỷ giá chuyển đổi từ USD sang đơn vị tiền tệ tùy chỉnh của bạn",
     "Convert reasoning_content to <think> tag in content": "Chuyển đổi reasoning_content thành thẻ <think> trong nội dung",
+    "Video Parsing": "Phân tích video",
+    "Route requests containing video content exclusively to channels with this switch enabled": "Định tuyến các yêu cầu có nội dung video chỉ đến các kênh đã bật công tắc này",
     "Convert string to lowercase": "Chuyển chuỗi sang chữ thường",
     "Convert string to uppercase": "Chuyển chuỗi sang chữ hoa",
     "Convert to expression": "Chuyển sang biểu thức",
@@ -5475,6 +5477,8 @@
     "Revoked an access token": "Đã thu hồi token truy cập",
     "Rewards will be added directly to your balance": "Phần thưởng sẽ được thêm trực tiếp vào số dư của bạn",
     "Rewrite callback URLs to the local server": "Viết lại URL callback đến máy chủ cục bộ",
+    "Rewrite response model": "Viết lại model phản hồi",
+    "Rewrite the model field of every response to the model the client requested, leaving all other bytes untouched": "Thay trường model trong mọi phản hồi bằng model mà client yêu cầu, giữ nguyên phần còn lại",
     "Right to Left": "Phải sang trái",
     "Role": "Vai trò",
     "Roleplay": "Nhập vai",
@@ -7452,6 +7456,8 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Max Concurrent Requests": "Số yêu cầu đồng thời tối đa",
+    "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "Số yêu cầu đồng thời tối đa của kênh này. 0 = không giới hạn."
   }
 }

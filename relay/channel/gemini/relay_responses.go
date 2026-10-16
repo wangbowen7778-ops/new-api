@@ -69,7 +69,7 @@ func GeminiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	if responseID := helper.GetResponseID(c); responseID != "" {
 		responsesResp.ID = responseID
 	}
-	responsesResp.Model = info.UpstreamModelName
+	responsesResp.Model = helper.MaskClaimedModel(info, info.UpstreamModelName)
 	responsesResp.Usage = relayconvert.UsageFromChatUsage(&usage)
 
 	responseBody, err = common.Marshal(responsesResp)
@@ -77,8 +77,9 @@ func GeminiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 		return nil, types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 	}
 	// Model mapping disguise: rewrite the real upstream model name in the body
-	// (text, reasoning, model) before it reaches the client.
-	responseBody = []byte(helper.MaskModelText(info, string(responseBody)))
+	// (text, reasoning, model) before it reaches the client; the channel's
+	// response-model rewrite switch is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 	return &usage, nil
 }
@@ -88,7 +89,7 @@ func GeminiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, r
 	created := common.GetTimestamp()
 	state, err := relayconvert.NewResponseStreamState(types.RelayFormatGemini, types.RelayFormatOpenAIResponses, relayconvert.ResponseStreamOptions{
 		ID:                 responseID,
-		Model:              info.UpstreamModelName,
+		Model:              helper.MaskClaimedModel(info, info.UpstreamModelName),
 		Created:            created,
 		EmitSequenceNumber: true,
 	})
@@ -104,7 +105,7 @@ func GeminiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, r
 			streamErr = types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 			return false
 		}
-		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, string(data)); err != nil {
+		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, helper.MaskResponseText(info, string(data))); err != nil {
 			if info.StreamStatus != nil {
 				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, err)
 			}

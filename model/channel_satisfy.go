@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
@@ -65,4 +66,46 @@ func isChannelEnabledForGroupModelDB(group string, modelName string, channelID i
 
 func isChannelIDInList(list []int, channelID int) bool {
 	return slices.Contains(list, channelID)
+}
+
+// MaxConcurrencyRetryProbes counts the distinct priority tiers among the
+// enabled channels serving (group, modelName) after the request's channel
+// filters, so the concurrency-wait loop can cycle its tier index across all
+// of them.
+func MaxConcurrencyRetryProbes(group string, modelName string, filters []dto.ChannelFilter) int {
+	if group == "" || modelName == "" {
+		return 0
+	}
+	if !common.MemoryCacheEnabled {
+		var priorities []int64
+		DB.Model(&Ability{}).
+			Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, modelName, true).
+			Distinct("priority").
+			Pluck("priority", &priorities)
+		return len(priorities)
+	}
+
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	if group2model2channels == nil {
+		return 0
+	}
+	ids := group2model2channels[group][modelName]
+	if len(ids) == 0 {
+		normalized := ratio_setting.RoutingMatchModelName(modelName)
+		if normalized != "" && normalized != modelName {
+			ids = group2model2channels[group][normalized]
+		}
+	}
+	ids, _ = filterCandidateIDs(ids, modelName, filters)
+	seen := make(map[int64]struct{}, 4)
+	for _, id := range ids {
+		channel, ok := channelsIDM[id]
+		if !ok {
+			continue
+		}
+		seen[channel.GetPriority()] = struct{}{}
+	}
+	return len(seen)
 }

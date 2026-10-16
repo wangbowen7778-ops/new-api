@@ -137,9 +137,9 @@ func TestDecideRelayRetryReasons(t *testing.T) {
 		want    PolicyDecision
 	}{
 		{name: "retry status matched", err: upstream(http.StatusTooManyRequests), retries: 1, want: PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}},
-		{name: "status outside retry rules", err: upstream(http.StatusBadRequest), retries: 1, want: PolicyDecision{Action: "stop", Reason: "status_not_retryable", Source: "global"}},
-		{name: "attempt budget exhausted", err: upstream(http.StatusTooManyRequests), retries: 0, want: PolicyDecision{Action: "stop", Reason: "attempt_budget_exhausted", Source: "global"}},
-		{name: "always skipped status", err: upstream(http.StatusGatewayTimeout), retries: 1, want: PolicyDecision{Action: "stop", Reason: "system_retry_exclusion", Source: "system"}},
+		{name: "any non-2xx switches channels", err: upstream(http.StatusBadRequest), retries: 1, want: PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}},
+		{name: "gateway timeout switches channels", err: upstream(http.StatusGatewayTimeout), retries: 1, want: PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}},
+		{name: "upstream failure switches channels without budget", err: upstream(http.StatusServiceUnavailable), retries: 0, want: PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}},
 		{name: "success status never retries", err: upstream(http.StatusOK), retries: 1, want: PolicyDecision{Action: "stop", Reason: "system_retry_exclusion", Source: "system"}},
 		{name: "skip retry error", err: types.NewErrorWithStatusCode(errors.New("local"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry()), retries: 1, want: PolicyDecision{Action: "stop", Reason: "non_retryable_error", Source: "system"}},
 		{name: "channel error retries without budget", err: types.NewError(errors.New("no key"), types.ErrorCodeChannelNoAvailableKey), retries: 0, want: PolicyDecision{Action: "retry", Reason: "channel_error", Source: "system"}},
@@ -186,7 +186,7 @@ func TestRequestPolicyEventsReachLogAdminInfo(t *testing.T) {
 	assert.Equal(t, "default", events[0].Group)
 	assert.Equal(t, PolicyDecision{Action: "failure", Reason: "upstream_failure", Source: "upstream"}, events[1].Decision)
 	assert.Equal(t, http.StatusUnauthorized, events[1].Status)
-	assert.Equal(t, PolicyDecision{Action: "stop", Reason: "attempt_budget_exhausted", Source: "global"}, events[2].Decision)
+	assert.Equal(t, PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}, events[2].Decision)
 	assert.Equal(t, "channel_disable_requested", events[2].Health, "the health entry follows the automatic disable rules")
 	common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, true)
 	RecordPolicyFailure(c, 7, apiErr, DecideRelayRetry(c, apiErr, 0))

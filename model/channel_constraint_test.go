@@ -37,6 +37,8 @@ func TestFilterCandidateIDs(t *testing.T) {
 			}},
 		},
 	})
+	videoSetting := `{"video_parsing_enabled":true}`
+	video := &Channel{Id: 900020, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Setting: &videoSetting}
 
 	pathFilter := dto.ChannelFilter{Kind: dto.FilterRequestPath, RequestPath: "/v1/chat/completions"}
 	emptyPathFilter := dto.ChannelFilter{Kind: dto.FilterRequestPath, RequestPath: ""}
@@ -145,6 +147,35 @@ func TestFilterCandidateIDs(t *testing.T) {
 			wantKept:  []int{},
 			wantEmpty: dto.FilterRequestPath,
 		},
+		{
+			name:      "video filter keeps only video-marked channel",
+			ids:       []int{900003, 900020},
+			modelName: "gpt-4",
+			filters:   []dto.ChannelFilter{{Kind: dto.FilterRequestContainsVideo}},
+			wantKept:  []int{900020},
+		},
+		{
+			name:      "video filter drops all unmarked channels",
+			ids:       []int{900003},
+			modelName: "gpt-4",
+			filters:   []dto.ChannelFilter{{Kind: dto.FilterRequestContainsVideo}},
+			wantKept:  []int{},
+			wantEmpty: dto.FilterRequestContainsVideo,
+		},
+		{
+			name:      "video filter drops missing cache entry",
+			ids:       []int{900020, 999999},
+			modelName: "gpt-4",
+			filters:   []dto.ChannelFilter{{Kind: dto.FilterRequestContainsVideo}},
+			wantKept:  []int{900020},
+		},
+		{
+			name:      "no video filter keeps unmarked channels",
+			ids:       []int{900003, 900020},
+			modelName: "gpt-4",
+			filters:   nil,
+			wantKept:  []int{900003, 900020},
+		},
 	}
 
 	channelSyncLock.Lock()
@@ -157,6 +188,7 @@ func TestFilterCandidateIDs(t *testing.T) {
 		900005: jimeng,
 		900010: matchingCustom,
 		900011: otherCustom,
+		900020: video,
 	}
 	t.Cleanup(func() {
 		channelsIDM = previous

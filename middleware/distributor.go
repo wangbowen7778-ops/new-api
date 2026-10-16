@@ -27,8 +27,9 @@ import (
 )
 
 type ModelRequest struct {
-	Model string `json:"model"`
-	Group string `json:"group,omitempty"`
+	Model         string `json:"model"`
+	Group         string `json:"group,omitempty"`
+	ContainsVideo bool   `json:"-"`
 }
 
 func Distribute() func(c *gin.Context) {
@@ -49,6 +50,9 @@ func Distribute() func(c *gin.Context) {
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
+		}
+		if modelRequest != nil && modelRequest.ContainsVideo {
+			constraints.AddFilter(taskdto.ChannelFilter{Kind: taskdto.FilterRequestContainsVideo})
 		}
 		_, pinned, _ := constraints.ResolvedPin()
 		if !pinned {
@@ -283,9 +287,36 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	c.Request.Body = io.NopCloser(storage)
 
 	return &ModelRequest{
-		Model: model,
-		Group: group,
+		Model:         model,
+		Group:         group,
+		ContainsVideo: bodyContainsVideoPart(requestBody),
 	}, nil
+}
+
+// bodyContainsVideoPart reports whether any OpenAI chat message carries a
+// base64-encoded video content part (data:video/... URL). Channels only
+// support base64 video uploads, so http/https video_url links do not count.
+// Scans only part "type" and URL prefix; payloads are never copied.
+func bodyContainsVideoPart(requestBody []byte) bool {
+	messages := gjson.GetBytes(requestBody, "messages")
+	if !messages.IsArray() {
+		return false
+	}
+	for _, message := range messages.Array() {
+		content := message.Get("content")
+		if !content.IsArray() {
+			continue
+		}
+		for _, part := range content.Array() {
+			if part.Get("type").String() != dto.ContentTypeVideoUrl {
+				continue
+			}
+			if strings.HasPrefix(part.Get("video_url.url").String(), "data:video") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func countTopLevelJSONKey(data []byte, target string) int {

@@ -21,7 +21,7 @@ func ClaudeResponsesStreamHandler(c *gin.Context, resp *http.Response, info *rel
 	created := common.GetTimestamp()
 	state, err := relayconvert.NewResponseStreamState(types.RelayFormatClaude, types.RelayFormatOpenAIResponses, relayconvert.ResponseStreamOptions{
 		ID:                 responseID,
-		Model:              info.UpstreamModelName,
+		Model:              helper.MaskClaimedModel(info, info.UpstreamModelName),
 		Created:            created,
 		EmitSequenceNumber: true,
 	})
@@ -33,7 +33,7 @@ func ClaudeResponsesStreamHandler(c *gin.Context, resp *http.Response, info *rel
 	claudeInfo := &ClaudeResponseInfo{
 		ResponseId:   responseID,
 		Created:      created,
-		Model:        info.UpstreamModelName,
+		Model:        helper.MaskClaimedModel(info, info.UpstreamModelName),
 		ResponseText: strings.Builder{},
 		Usage:        &dto.Usage{},
 	}
@@ -50,7 +50,7 @@ func ClaudeResponsesStreamHandler(c *gin.Context, resp *http.Response, info *rel
 			streamErr = types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 			return false
 		}
-		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: eventType}, string(data)); err != nil {
+		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: eventType}, helper.MaskResponseText(info, string(data))); err != nil {
 			streamErr = types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)
 			return false
 		}

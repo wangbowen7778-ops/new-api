@@ -17,6 +17,11 @@ import (
 
 // DecideRelayRetry is the single retry decision for relay attempts. The reason
 // is recorded in the request policy decision events of the log details.
+//
+// A healthy 2xx response is the only outcome that settles: every channel error
+// and every non-2xx upstream status switches to another channel of the same
+// model instead of failing on the first attempt. The callers own the attempt
+// budget, so retryTimes does not gate the decision here.
 func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) PolicyDecision {
 	if err == nil {
 		return PolicyDecision{Action: "stop", Reason: "request_completed", Source: "system"}
@@ -34,11 +39,11 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if types.IsChannelError(err) {
 		return PolicyDecision{Action: "retry", Reason: "channel_error", Source: "system"}
 	}
+	// Errors the attempt marked as non-retryable describe a failure that
+	// reproducing on another channel cannot fix: a rejected request, a
+	// conversion failure, or an exhausted quota. Those stay fatal.
 	if types.IsSkipRetryError(err) {
 		return PolicyDecision{Action: "stop", Reason: "non_retryable_error", Source: "system"}
-	}
-	if retryTimes <= 0 {
-		return PolicyDecision{Action: "stop", Reason: "attempt_budget_exhausted", Source: "global"}
 	}
 	code := err.StatusCode
 	if code >= 200 && code < 300 {
@@ -46,9 +51,6 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	}
 	if code < 100 || code > 599 {
 		return PolicyDecision{Action: "retry", Reason: "unrecognized_status", Source: "system"}
-	}
-	if operation_setting.IsAlwaysSkipRetryCode(err.GetErrorCode()) || operation_setting.IsAlwaysSkipRetryStatusCode(code) {
-		return PolicyDecision{Action: "stop", Reason: "system_retry_exclusion", Source: "system"}
 	}
 	if operation_setting.ShouldRetryByStatusCode(code) {
 		return PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}

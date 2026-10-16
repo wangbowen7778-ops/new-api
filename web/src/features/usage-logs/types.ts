@@ -342,6 +342,7 @@ export interface TaskLog {
     input?: string
     upstream_model_name?: string
     origin_model_name?: string
+    rewrite_response_model?: boolean
   }
   legacy_video_available?: boolean
   // A synchronous result returned inline and never persisted; artifact

@@ -84,6 +84,11 @@ type Properties struct {
 	Input             string `json:"input"`
 	UpstreamModelName string `json:"upstream_model_name,omitempty"`
 	OriginModelName   string `json:"origin_model_name,omitempty"`
+	// RewriteResponseModel mirrors the serving channel's "Rewrite response model"
+	// switch at submit time. The channel presents every response as the requested
+	// model, so task logs (written later, during polling) must not reveal the real
+	// upstream model.
+	RewriteResponseModel bool `json:"rewrite_response_model,omitempty"`
 }
 
 func (m *Properties) Scan(val any) error {
@@ -255,6 +260,7 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 		if relayInfo.OriginModelName != "" {
 			properties.OriginModelName = relayInfo.OriginModelName
 		}
+		properties.RewriteResponseModel = relayInfo.ChannelSetting.RewriteResponseModel
 	}
 
 	// 使用预生成的公开 ID（如果有），否则新生成

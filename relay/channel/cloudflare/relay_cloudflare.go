@@ -62,7 +62,7 @@ func cfStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 			responseText += choice.Delta.GetContentString()
 		}
 		response.Id = id
-		response.Model = info.UpstreamModelName
+		response.Model = helper.MaskClaimedModel(info, info.UpstreamModelName)
 		err = helper.ObjectData(c, response)
 		if isFirst {
 			isFirst = false
@@ -78,7 +78,7 @@ func cfStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 	}
 	usage := service.ResponseText2Usage(c, responseText, info.UpstreamModelName, info.GetEstimatePromptTokens())
 	if info.ShouldIncludeUsage {
-		response := helper.GenerateFinalUsageResponse(id, info.StartTime.Unix(), info.UpstreamModelName, *usage)
+		response := helper.GenerateFinalUsageResponse(id, info.StartTime.Unix(), helper.MaskClaimedModel(info, info.UpstreamModelName), *usage)
 		err := helper.ObjectData(c, response)
 		if err != nil {
 			logger.LogError(c, common.LogText("error_rendering_final_usage_response: %s", err.Error()))
@@ -102,7 +102,7 @@ func cfHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response)
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeBadResponseBody), nil
 	}
-	response.Model = info.UpstreamModelName
+	response.Model = helper.MaskClaimedModel(info, info.UpstreamModelName)
 	var responseText string
 	for _, choice := range response.Choices {
 		responseText += choice.Message.StringContent()

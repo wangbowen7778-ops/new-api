@@ -16,7 +16,7 @@ version: '3.4' # For compatibility with older Docker versions
 
 services:
   new-api:
-    image: calciumion/new-api:v1.0.0-rc.241
+    image: calciumion/new-api:v1.0.0-rc.251
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
@@ -37,6 +37,8 @@ services:
       - CRITICAL_RATE_LIMIT_ENABLE=false
       - GLOBAL_WEB_RATE_LIMIT_ENABLE=false
       - GLOBAL_WEB_RATE_LIMIT=300/1m
+      - RELAY_MAX_IDLE_CONNS=1000  # Relay HTTP 客户端全局最大空闲连接数 (Relay HTTP client global max idle conns)
+      - RELAY_MAX_IDLE_CONNS_PER_HOST=600  # 每 upstream 主机的空闲连接上限，默认 100；高并发打同一个上游时调大可避免反复 TLS 握手 (Per-host idle conn cap; raise when many concurrent requests hit the same upstream to avoid repeated TLS handshakes)
 #      - STREAMING_TIMEOUT=300  # 流模式无响应超时时间，单位秒，默认120秒，如果出现空补全可以尝试改为更大值 （Streaming timeout in seconds, default is 120s. Increase if experiencing empty completions）
 #      - RELAY_IDLE_CONN_TIMEOUT=90  # Relay HTTP 客户端空闲连接超时时间，单位秒，默认跟随 Go 标准库，设置为0表示不限制 (Relay HTTP client idle keep-alive timeout in seconds, defaults to Go standard library; set 0 to disable)
 #      - SESSION_SECRET=random_string  # 多机部署时设置，必须修改这个随机字符串！！ （multi-node deployment, set this to a random string!!!!!!!）

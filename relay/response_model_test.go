@@ -116,6 +116,40 @@ func TestResponseModelLogOmitsUnchangedModel(t *testing.T) {
 	}
 }
 
+func TestResponseModelLogHidesRealModelWhenRewriteEnabled(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		rewrite bool
+		hides   bool
+	}{
+		{name: "rewrite enabled", rewrite: true, hides: true},
+		{name: "rewrite disabled", rewrite: false, hides: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "requested",
+				ChannelMeta: &relaycommon.ChannelMeta{
+					UpstreamModelName: "mapped",
+					IsModelMapped:     true,
+					ChannelSetting:    dto.ChannelSettings{RewriteResponseModel: tc.rewrite},
+				},
+			}
+			info.ObserveResponseModel("other")
+			require.True(t, info.ResponseModel.Mismatch())
+			other := service.GenerateTextOtherInfo(c, info, 1, 1, 1, 0, 0, 0, 1)
+			if tc.hides {
+				assert.NotContains(t, other.Snapshot(), "response_model", "the real upstream model is never logged for a rewriting channel")
+				assert.NotContains(t, other.Snapshot(), "upstream_model_name")
+				assert.NotContains(t, other.Snapshot(), "is_model_mapped")
+				return
+			}
+			assert.Contains(t, other.Snapshot(), "response_model")
+			assert.Equal(t, "mapped", other.Snapshot()["upstream_model_name"])
+		})
+	}
+}
+
 func TestResponseModelEmptyExpectedNamesDoNotMatchEveryPrefix(t *testing.T) {
 	for _, tc := range []struct{ requested, upstream string }{
 		{}, {upstream: "mapped"}, {requested: "requested"},

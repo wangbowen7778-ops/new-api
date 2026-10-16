@@ -48,6 +48,15 @@ type RetryParam struct {
 	RequestPath  string
 	Retry        *int
 	resetNextTry bool
+	// TierOverride, when non-nil, pins the priority-tier index used for
+	// channel selection, bypassing the retry-index mapping. The
+	// concurrency-wait loop cycles it across tiers so probes revisit top
+	// tiers instead of getting stuck on the lowest one. See selectionTier.
+	TierOverride *int
+	// PriorityFloor, when > 0, clamps the priority-tier index used for
+	// channel selection so tiers above it are re-probed before dropping
+	// lower. See selectionTier.
+	PriorityFloor int
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -74,6 +83,20 @@ func (p *RetryParam) IncreaseRetry() {
 
 func (p *RetryParam) ResetRetryNextTry() {
 	p.resetNextTry = true
+}
+
+// selectionTier maps the attempt counter to a priority-tier index. TierOverride
+// wins when set: the concurrency-wait loop keeps retrying past the tier count,
+// so without an explicit cycle it would clamp to the lowest tier and never
+// re-probe freed high-priority channels.
+func (p *RetryParam) selectionTier(retry int) int {
+	if p.TierOverride != nil {
+		return *p.TierOverride
+	}
+	if p.PriorityFloor <= 0 || retry <= p.PriorityFloor {
+		return retry
+	}
+	return p.PriorityFloor
 }
 
 // CacheGetRandomSatisfiedChannel tries to get a random channel that satisfies the requirements.
@@ -150,7 +173,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			channel, _ = model.GetRandomSatisfiedChannel(
 				autoGroup,
 				param.ModelName,
-				priorityRetry,
+				param.selectionTier(priorityRetry),
 				filters,
 			)
 			if channel == nil {
@@ -171,7 +194,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 
 			// Prepare state for next retry
 			// 为下一次重试准备状态
-			if crossGroupRetry && priorityRetry >= common.RetryTimes {
+			if crossGroupRetry && priorityRetry >= common.RetryTimes && param.selectionTier(priorityRetry) >= common.RetryTimes {
 				// Current group has exhausted all retries, prepare to switch to next group
 				// This request still uses current group, but next retry will use next group
 				// 当前分组已用完所有重试次数，准备切换到下一个分组
@@ -193,7 +216,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		channel, err = model.GetRandomSatisfiedChannel(
 			param.TokenGroup,
 			param.ModelName,
-			param.GetRetry(),
+			param.selectionTier(param.GetRetry()),
 			filters,
 		)
 		if err != nil {

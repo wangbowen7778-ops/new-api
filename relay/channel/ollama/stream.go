@@ -149,7 +149,7 @@ func ollamaStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	helper.SetEventStreamHeaders(c)
 	scanner := helper.NewStreamScanner(resp.Body)
 	usage := &dto.Usage{}
-	var model = info.UpstreamModelName
+	var model = helper.MaskClaimedModel(info, info.UpstreamModelName)
 	var responseId = common.GetUUID()
 	var created = time.Now().Unix()
 	var toolCallIndex int
@@ -170,7 +170,7 @@ func ollamaStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 			return usage, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 		}
 		if chunk.Model != "" {
-			model = chunk.Model
+			model = helper.MaskClaimedModel(info, chunk.Model)
 		}
 		created = toUnix(chunk.CreatedAt)
 
@@ -315,6 +315,7 @@ func ollamaChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	if model == "" {
 		model = info.UpstreamModelName
 	}
+	model = helper.MaskClaimedModel(info, model)
 	created := toUnix(lastChunk.CreatedAt)
 	usage := &dto.Usage{PromptTokens: lastChunk.PromptEvalCount, CompletionTokens: lastChunk.EvalCount, TotalTokens: lastChunk.PromptEvalCount + lastChunk.EvalCount}
 	content := aggContent.String()

@@ -111,7 +111,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	if relayInfo.ReasoningEffort != "" {
 		other.SetPublic("reasoning_effort", relayInfo.ReasoningEffort)
 	}
-	if relayInfo.IsModelMapped {
+	if relayInfo.IsModelMapped && !responseModelDisguised(relayInfo) {
 		other.SetPublic("is_model_mapped", true)
 		other.SetPublic("upstream_model_name", relayInfo.UpstreamModelName)
 	}
@@ -136,6 +136,11 @@ func AppendResponseModelLogInfo(relayInfo *relaycommon.RelayInfo, other *model.L
 	if relayInfo == nil || relayInfo.ResponseModel == nil || other == nil {
 		return
 	}
+	// A channel that rewrites the response model to the requested name hides the
+	// real upstream model by design, so its observation never reaches the log.
+	if responseModelDisguised(relayInfo) {
+		return
+	}
 	observation := relayInfo.ResponseModel
 	if observation.ReturnedModel == observation.RequestedModel &&
 		(observation.UpstreamModel == "" || observation.UpstreamModel == observation.RequestedModel) &&
@@ -143,6 +148,18 @@ func AppendResponseModelLogInfo(relayInfo *relaycommon.RelayInfo, other *model.L
 		return
 	}
 	other.SetPublic("response_model", *observation)
+}
+
+// responseModelDisguised reports whether the serving channel rewrote the
+// response's model field back to the client-requested name (the channel
+// "Rewrite response model" switch). Such a channel presents every request as
+// the requested model, so the log must not expose the real upstream model or
+// flag the intended difference as a mismatch.
+func responseModelDisguised(relayInfo *relaycommon.RelayInfo) bool {
+	if relayInfo == nil || relayInfo.ChannelMeta == nil || !relayInfo.ChannelSetting.RewriteResponseModel {
+		return false
+	}
+	return relayInfo.OriginModelName != ""
 }
 
 func appendParamOverrideInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {

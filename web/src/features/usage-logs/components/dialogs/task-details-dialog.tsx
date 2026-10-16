@@ -149,7 +149,8 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
               mono
             />
           ) : null}
-          {properties?.upstream_model_name ? (
+          {properties?.upstream_model_name &&
+          !properties.rewrite_response_model ? (
             <DetailRow
               label={t('Actual Model')}
               value={properties.upstream_model_name}

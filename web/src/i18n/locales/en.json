@@ -158,7 +158,6 @@
     "24 Hours": "24 Hours",
     "24 hours ago": "24 hours ago",
     "29 Days": "29 Days",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 and 524 are always excluded.",
     "3. Enter your Gotify server URL and token above": "3. Enter your Gotify server URL and token above",
     "3. Review mappings": "3. Review mappings",
     "30 days": "30 days",
@@ -553,6 +552,7 @@
     "Anthropic Messages to OpenAI Responses": "Anthropic Messages to OpenAI Responses",
     "Any condition": "Any condition",
     "Any Match (OR)": "Any Match (OR)",
+    "Any status not listed switches to another channel.": "Any status not listed switches to another channel.",
     "Anyone can publish an index. A plugin installed from a third-party source has the same access as one you upload by hand: review its source before installing.": "Anyone can publish an index. A plugin installed from a third-party source has the same access as one you upload by hand: review its source before installing.",
     "API": "API",
     "API Access": "API Access",
@@ -1535,6 +1535,8 @@
     "Conversation cleared": "Conversation cleared",
     "Conversion rate from USD to your custom currency": "Conversion rate from USD to your custom currency",
     "Convert reasoning_content to <think> tag in content": "Convert reasoning_content to <think> tag in content",
+    "Video Parsing": "Video Parsing",
+    "Route requests containing video content exclusively to channels with this switch enabled": "Route requests containing video content exclusively to channels with this switch enabled",
     "Convert string to lowercase": "Convert string to lowercase",
     "Convert string to uppercase": "Convert string to uppercase",
     "Convert to expression": "Convert to expression",
@@ -5475,6 +5477,8 @@
     "Revoked an access token": "Revoked an access token",
     "Rewards will be added directly to your balance": "Rewards will be added directly to your balance",
     "Rewrite callback URLs to the local server": "Rewrite callback URLs to the local server",
+    "Rewrite response model": "Rewrite response model",
+    "Rewrite the model field of every response to the model the client requested, leaving all other bytes untouched": "Rewrite the model field of every response to the model the client requested, leaving all other bytes untouched",
     "Right to Left": "Right to Left",
     "Role": "Role",
     "Roleplay": "Roleplay",
@@ -7452,6 +7456,8 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Max Concurrent Requests": "Max Concurrent Requests",
+    "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "Maximum concurrent in-flight requests for this channel. 0 = unlimited."
   }
 }

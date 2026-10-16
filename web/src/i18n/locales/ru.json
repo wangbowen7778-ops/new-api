@@ -158,7 +158,6 @@
     "24 Hours": "24 часа",
     "24 hours ago": "24 часа назад",
     "29 Days": "29 дней",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 и 524 всегда исключены.",
     "3. Enter your Gotify server URL and token above": "3. Введите URL вашего сервера Gotify и токен выше",
     "3. Review mappings": "3. Проверьте сопоставления",
     "30 days": "30 дней",
@@ -553,6 +552,7 @@
     "Anthropic Messages to OpenAI Responses": "Anthropic Messages в OpenAI Responses",
     "Any condition": "Любое условие",
     "Any Match (OR)": "Любое совпадение (OR)",
+    "Any status not listed switches to another channel.": "Любой статус, не указанный в списке, переключает на другой канал.",
     "Anyone can publish an index. A plugin installed from a third-party source has the same access as one you upload by hand: review its source before installing.": "Публиковать индекс может кто угодно. Плагин, установленный из стороннего источника, получает те же права, что и загруженный вручную: изучите его код перед установкой.",
     "API": "API",
     "API Access": "Доступ к API",
@@ -1535,6 +1535,8 @@
     "Conversation cleared": "Диалог очищен",
     "Conversion rate from USD to your custom currency": "Курс конвертации из USD в вашу пользовательскую валюту",
     "Convert reasoning_content to <think> tag in content": "Преобразовать reasoning_content в тег <think> в content",
+    "Video Parsing": "Анализ видео",
+    "Route requests containing video content exclusively to channels with this switch enabled": "Направляет запросы с видеоконтентом только на каналы, где включён этот переключатель",
     "Convert string to lowercase": "Преобразовать строку в нижний регистр",
     "Convert string to uppercase": "Преобразовать строку в верхний регистр",
     "Convert to expression": "Преобразовать в выражение",
@@ -5475,6 +5477,8 @@
     "Revoked an access token": "Отозван токен доступа",
     "Rewards will be added directly to your balance": "Награды будут добавлены напрямую в ваш баланс",
     "Rewrite callback URLs to the local server": "Перезаписывать URL обратных вызовов на локальный сервер",
+    "Rewrite response model": "Перезаписывать модель ответа",
+    "Rewrite the model field of every response to the model the client requested, leaving all other bytes untouched": "Заменяет поле model в каждом ответе на запрошенную клиентом модель, не изменяя остальное содержимое",
     "Right to Left": "Справа налево",
     "Role": "Роль",
     "Roleplay": "Ролевые игры",
@@ -7452,6 +7456,8 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Max Concurrent Requests": "Макс. одновременных запросов",
+    "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "Максимальное число одновременных запросов для канала. 0 — без ограничения."
   }
 }

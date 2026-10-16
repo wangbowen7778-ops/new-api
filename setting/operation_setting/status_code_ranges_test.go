@@ -62,21 +62,23 @@ func TestShouldRetryByStatusCode(t *testing.T) {
 
 	require.True(t, ShouldRetryByStatusCode(429))
 	require.True(t, ShouldRetryByStatusCode(500))
-	require.False(t, ShouldRetryByStatusCode(504))
-	require.False(t, ShouldRetryByStatusCode(524))
+	require.True(t, ShouldRetryByStatusCode(504))
+	require.True(t, ShouldRetryByStatusCode(524))
 	require.False(t, ShouldRetryByStatusCode(400))
 	require.False(t, ShouldRetryByStatusCode(200))
 }
 
-func TestShouldRetryByStatusCode_DefaultMatchesLegacyBehavior(t *testing.T) {
+func TestShouldRetryByStatusCode_DefaultSwitchesOnAnyNon2xx(t *testing.T) {
 	require.False(t, ShouldRetryByStatusCode(200))
-	require.False(t, ShouldRetryByStatusCode(400))
+	require.False(t, ShouldRetryByStatusCode(204))
+	require.False(t, ShouldRetryByStatusCode(299))
+	require.True(t, ShouldRetryByStatusCode(400))
 	require.True(t, ShouldRetryByStatusCode(401))
-	require.False(t, ShouldRetryByStatusCode(408))
+	require.True(t, ShouldRetryByStatusCode(408))
 	require.True(t, ShouldRetryByStatusCode(429))
 	require.True(t, ShouldRetryByStatusCode(500))
-	require.False(t, ShouldRetryByStatusCode(504))
-	require.False(t, ShouldRetryByStatusCode(524))
+	require.True(t, ShouldRetryByStatusCode(504))
+	require.True(t, ShouldRetryByStatusCode(524))
 	require.True(t, ShouldRetryByStatusCode(599))
 }
 

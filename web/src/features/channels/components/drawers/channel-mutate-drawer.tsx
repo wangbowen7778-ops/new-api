@@ -296,12 +296,15 @@ const SENSITIVE_FORM_FIELDS = [
   'azure_responses_version',
   'force_format',
   'thinking_to_content',
+  'rewrite_response_model',
   'proxy',
   'http_protocol',
   'http2_connection_shards',
+  'max_concurrent_requests',
   'tls_insecure_skip_verify',
   'pass_through_body_enabled',
   'responses_websocket_enabled',
+  'video_parsing_enabled',
   'hoist_message_tools',
   'system_prompt',
   'system_prompt_override',
@@ -1950,6 +1953,58 @@ export function ChannelMutateDrawer({
     />
   )
 
+  const videoParsingFields = (
+    <FormField
+      control={form.control}
+      name='video_parsing_enabled'
+      render={({ field }) => (
+        <FormItem className='flex items-center justify-between px-4 py-3'>
+          <div className='space-y-0.5'>
+            <FormLabel>{t('Video Parsing')}</FormLabel>
+            <FormDescription>
+              {t(
+                'Route requests containing video content exclusively to channels with this switch enabled'
+              )}
+            </FormDescription>
+          </div>
+          <FormControl>
+            <Switch
+              disabled={sensitiveLocked}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+
+  const rewriteResponseModelFields = (
+    <FormField
+      control={form.control}
+      name='rewrite_response_model'
+      render={({ field }) => (
+        <FormItem className='flex items-center justify-between px-4 py-3'>
+          <div className='space-y-0.5'>
+            <FormLabel>{t('Rewrite response model')}</FormLabel>
+            <FormDescription>
+              {t(
+                'Rewrite the model field of every response to the model the client requested, leaving all other bytes untouched'
+              )}
+            </FormDescription>
+          </div>
+          <FormControl>
+            <Switch
+              disabled={sensitiveLocked}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+
   const taskPollingFields = (
     <FormField
       control={form.control}
@@ -2266,6 +2321,28 @@ export function ChannelMutateDrawer({
                 />
               </FormControl>
               <FormDescription>{t(FIELD_DESCRIPTIONS.WEIGHT)}</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name='max_concurrent_requests'
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('Max Concurrent Requests')}</FormLabel>
+              <FormControl>
+                <Input
+                  type='number'
+                  placeholder='0'
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>
+                {t(FIELD_DESCRIPTIONS.MAX_CONCURRENT_REQUESTS)}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -4712,6 +4789,8 @@ export function ChannelMutateDrawer({
                 {formatFields}
                 {ollamaOpenAIChatFields}
                 {thinkingFields}
+                {rewriteResponseModelFields}
+                {videoParsingFields}
                 {currentType !== CHANNEL_TYPE_ADVANCED_CUSTOM &&
                   passthroughFields}
                 {systemPromptFields}

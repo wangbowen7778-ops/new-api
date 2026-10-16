@@ -36,9 +36,10 @@ type ChannelPin struct {
 type ChannelFilterKind string
 
 const (
-	FilterRequestPath        ChannelFilterKind = "request_path"
-	FilterTaskPluginIdentity ChannelFilterKind = "task_plugin_identity"
-	FilterResponsesWebSocket ChannelFilterKind = "responses_websocket"
+	FilterRequestPath          ChannelFilterKind = "request_path"
+	FilterTaskPluginIdentity   ChannelFilterKind = "task_plugin_identity"
+	FilterResponsesWebSocket   ChannelFilterKind = "responses_websocket"
+	FilterRequestContainsVideo ChannelFilterKind = "request_contains_video"
 )
 
 type ChannelFilter struct {

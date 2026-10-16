@@ -18,8 +18,12 @@ type ChannelSettings struct {
 	Proxy                     string `json:"proxy"`
 	PassThroughBodyEnabled    bool   `json:"pass_through_body_enabled,omitempty"`
 	ResponsesWebSocketEnabled bool   `json:"responses_websocket_enabled,omitempty"`
-	SystemPrompt              string `json:"system_prompt,omitempty"`
-	SystemPromptOverride      bool   `json:"system_prompt_override,omitempty"`
+	// VideoParsingEnabled marks the channel as supporting video parsing.
+	// Requests containing video_url content parts are routed only to channels
+	// with this flag; all other requests are unaffected.
+	VideoParsingEnabled  bool   `json:"video_parsing_enabled,omitempty"`
+	SystemPrompt         string `json:"system_prompt,omitempty"`
+	SystemPromptOverride bool   `json:"system_prompt_override,omitempty"`
 	// TaskExtendPluginKeys lists the task plugins a New API channel (type 60)
 	// is extended with. The upstream gateway may host many plugins, so the
 	// channel serves every listed plugin's models while the request still pins
@@ -35,9 +39,19 @@ type ChannelSettings struct {
 	// HTTP2ConnectionShards spreads HTTP/2 traffic across N independent transports
 	// (1-8). Zero/unset means 1. Ignored when HTTPProtocol is "http1".
 	HTTP2ConnectionShards int `json:"http2_connection_shards,omitempty"`
+	// MaxConcurrentRequests caps the number of in-flight relay requests this
+	// channel serves at once. Zero/unset means unlimited. On multi-node
+	// deployments the cap applies per node.
+	MaxConcurrentRequests int `json:"max_concurrent_requests,omitempty"`
 	// TLSInsecureSkipVerify accepts upstream certificates that fail
 	// verification, such as self-signed ones, for this channel only.
 	TLSInsecureSkipVerify bool `json:"tls_insecure_skip_verify,omitempty"`
+	// RewriteResponseModel rewrites the `model` field of every response body
+	// and stream frame the client receives to the model name the client
+	// requested, leaving all other bytes untouched. This is a structural
+	// rewrite of that one JSON field, independent of the model-mapping
+	// disguise text masking.
+	RewriteResponseModel bool `json:"rewrite_response_model,omitempty"`
 }
 
 // BindsTaskPlugin reports whether the channel is bound to the task plugin,
@@ -69,6 +83,9 @@ const (
 	HTTPProtocolAuto         = "auto"
 	HTTPProtocolHTTP1        = "http1"
 	MaxHTTP2ConnectionShards = 8
+	// MaxConcurrentRequestsLimit caps the channel concurrency setting to keep
+	// counters bounded. Zero/unset (unlimited) is always valid.
+	MaxConcurrentRequestsLimit = 100000
 )
 
 // ValidateHTTPTransport validates save-time HTTP transport channel settings.
@@ -87,6 +104,9 @@ func (s *ChannelSettings) ValidateHTTPTransport() error {
 	}
 	if protocol == HTTPProtocolHTTP1 && s.HTTP2ConnectionShards > 1 {
 		return fmt.Errorf("http2_connection_shards must be 1 when http_protocol is http1")
+	}
+	if s.MaxConcurrentRequests < 0 || s.MaxConcurrentRequests > MaxConcurrentRequestsLimit {
+		return fmt.Errorf("invalid max_concurrent_requests: %d", s.MaxConcurrentRequests)
 	}
 	return nil
 }

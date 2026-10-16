@@ -725,6 +725,20 @@ func TestChannelSettingsValidateHTTPTransport(t *testing.T) {
 	assert.Contains(t, err.Error(), "http2_connection_shards")
 }
 
+func TestChannelSettingsValidateMaxConcurrentRequests(t *testing.T) {
+	require.NoError(t, (&ChannelSettings{}).ValidateHTTPTransport())
+	require.NoError(t, (&ChannelSettings{MaxConcurrentRequests: 1}).ValidateHTTPTransport())
+	require.NoError(t, (&ChannelSettings{MaxConcurrentRequests: MaxConcurrentRequestsLimit}).ValidateHTTPTransport())
+
+	err := (&ChannelSettings{MaxConcurrentRequests: -1}).ValidateHTTPTransport()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "max_concurrent_requests")
+
+	err = (&ChannelSettings{MaxConcurrentRequests: MaxConcurrentRequestsLimit + 1}).ValidateHTTPTransport()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "max_concurrent_requests")
+}
+
 func TestChannelOtherSettingsValidateToolLossPolicy(t *testing.T) {
 	require.NoError(t, (*ChannelOtherSettings)(nil).ValidateToolLossPolicy())
 	require.NoError(t, (&ChannelOtherSettings{}).ValidateToolLossPolicy())

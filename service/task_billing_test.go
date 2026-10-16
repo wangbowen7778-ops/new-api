@@ -273,6 +273,33 @@ func TestTaskBillingOtherIncludesTieredSnapshotAndKeepsUsageFactsNested(t *testi
 	assert.NotContains(t, other, "seconds")
 }
 
+func TestTaskBillingOtherHidesMappedModelWhenRewriteEnabled(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		rewrite bool
+		hides   bool
+	}{
+		{name: "rewrite enabled", rewrite: true, hides: true},
+		{name: "rewrite disabled", rewrite: false, hides: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			task := makeTask(1, 1, 100, 0, BillingSourceWallet, 0)
+			task.Properties.UpstreamModelName = "mapped-model"
+			task.Properties.RewriteResponseModel = tc.rewrite
+
+			other := taskBillingOther(task).Snapshot()
+
+			if tc.hides {
+				assert.NotContains(t, other, "upstream_model_name")
+				assert.NotContains(t, other, "is_model_mapped")
+				return
+			}
+			assert.Equal(t, "mapped-model", other["upstream_model_name"])
+			assert.Equal(t, true, other["is_model_mapped"])
+		})
+	}
+}
+
 func TestTaskBillingOtherOmitsEmptyUsageFacts(t *testing.T) {
 	task := makeTask(1, 1, 100, 0, BillingSourceWallet, 0)
 	expression := `tier("base", 1)`

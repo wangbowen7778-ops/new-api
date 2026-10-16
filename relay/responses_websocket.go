@@ -288,7 +288,18 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 		}
 	} else {
 		retry := &service.RetryParam{Ctx: c, TokenGroup: common.GetContextKeyString(c, appconstant.ContextKeyUsingGroup), ModelName: modelName, RequestPath: c.Request.URL.Path, Retry: common.GetPointer(0)}
-		for ; retry.GetRetry() <= common.RetryTimes; retry.IncreaseRetry() {
+		// A dial failure switches to another channel of the same model and,
+		// like the HTTP relay, overruns the retry budget (common.RetryTimes)
+		// for one probe per priority tier so every candidate tier is revisited
+		// before the connection attempt settles on the error. -1 marks the
+		// budget as not yet initialized; 0 means exhausted.
+		switchBudget := int64(-1)
+		switchProbe := 0
+		tierCount := 0
+		for ; retry.GetRetry() <= common.RetryTimes || switchBudget > 0; retry.IncreaseRetry() {
+			if retry.GetRetry() > common.RetryTimes && switchBudget > 0 {
+				switchBudget--
+			}
 			var channel *appmodel.Channel
 			channel, apiErr = selectResponsesWSChannel(c, modelName, retry)
 			if apiErr != nil {
@@ -324,6 +335,23 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				service.ResetStatusCode(apiErr, c.GetString("status_code_mapping"))
 				info.LastError = apiErr
 				decision := service.DecideRelayRetry(c, apiErr, common.RetryTimes-retry.GetRetry())
+				if decision.Action == "retry" && retry.GetRetry() >= common.RetryTimes {
+					if switchBudget < 0 {
+						tierCount = max(appmodel.MaxConcurrencyRetryProbes(
+							common.GetContextKeyString(c, appconstant.ContextKeyUsingGroup),
+							modelName,
+							service.GetChannelConstraints(c).Filters,
+						), 1)
+						switchBudget = int64(tierCount)
+					}
+					tier := switchProbe % tierCount
+					switchProbe++
+					retry.TierOverride = &tier
+					retry.PriorityFloor = 0
+				} else {
+					retry.TierOverride = nil
+					retry.PriorityFloor = retry.GetRetry()
+				}
 				service.RecordPolicyFailure(c, channel.Id, apiErr, decision)
 				service.ProcessChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, info.ApiKey, channel.GetAutoBan()), apiErr, info)
 				if decision.Action == "retry" {

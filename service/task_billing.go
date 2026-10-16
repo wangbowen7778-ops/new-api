@@ -61,7 +61,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other.SetPublic("user_group_ratio", info.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	}
-	if info.IsModelMapped {
+	if info.IsModelMapped && !responseModelDisguised(info) {
 		other.SetPublic("is_model_mapped", true)
 		other.SetPublic("upstream_model_name", info.UpstreamModelName)
 	}
@@ -173,7 +173,7 @@ func taskBillingOther(task *model.Task) *model.LogOther {
 		}
 	}
 	props := task.Properties
-	if props.UpstreamModelName != "" && props.UpstreamModelName != props.OriginModelName {
+	if props.UpstreamModelName != "" && props.UpstreamModelName != props.OriginModelName && !props.RewriteResponseModel {
 		other.SetPublic("is_model_mapped", true)
 		other.SetPublic("upstream_model_name", props.UpstreamModelName)
 	}

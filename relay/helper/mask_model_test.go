@@ -19,6 +19,18 @@ func maskedInfo(origin, upstream string, mapped bool) *relaycommon.RelayInfo {
 	}
 }
 
+// rewriteInfo builds relay info for a channel with the response-model rewrite
+// switch toggled, independent of model-mapping disguise.
+func rewriteInfo(origin, upstream string, rewrite bool) *relaycommon.RelayInfo {
+	return &relaycommon.RelayInfo{
+		OriginModelName: origin,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: upstream,
+			ChannelSetting:    dto.ChannelSettings{RewriteResponseModel: rewrite},
+		},
+	}
+}
+
 func TestModelMaskingEnabled(t *testing.T) {
 	t.Run("nil info", func(t *testing.T) {
 		require.False(t, ModelMaskingEnabled(nil))
@@ -169,6 +181,116 @@ func TestMaskClaimedModel(t *testing.T) {
 	t.Run("masking inactive without fallback returns upstream", func(t *testing.T) {
 		info := maskedInfo("gpt-4o", "claude-sonnet-4-5", false)
 		assert.Equal(t, "claude-sonnet-4-5", MaskClaimedModel(info, ""))
+	})
+	t.Run("rewrite switch returns origin without mapping", func(t *testing.T) {
+		info := rewriteInfo("gpt-4o", "claude-sonnet-4-5", true)
+		assert.Equal(t, "gpt-4o", MaskClaimedModel(info, "claude-sonnet-4-5"))
+	})
+	t.Run("rewrite switch off returns fallback", func(t *testing.T) {
+		info := rewriteInfo("gpt-4o", "claude-sonnet-4-5", false)
+		assert.Equal(t, "claude-sonnet-4-5", MaskClaimedModel(info, "claude-sonnet-4-5"))
+	})
+}
+
+func TestResponseModelRewriteEnabled(t *testing.T) {
+	t.Run("nil info", func(t *testing.T) {
+		require.False(t, ResponseModelRewriteEnabled(nil))
+	})
+	t.Run("nil channel meta", func(t *testing.T) {
+		require.False(t, ResponseModelRewriteEnabled(&relaycommon.RelayInfo{OriginModelName: "gpt-4o"}))
+	})
+	t.Run("switch off", func(t *testing.T) {
+		require.False(t, ResponseModelRewriteEnabled(rewriteInfo("gpt-4o", "claude-sonnet-4-5", false)))
+	})
+	t.Run("switch on but empty origin", func(t *testing.T) {
+		require.False(t, ResponseModelRewriteEnabled(rewriteInfo("", "claude-sonnet-4-5", true)))
+	})
+	t.Run("switch on with origin", func(t *testing.T) {
+		require.True(t, ResponseModelRewriteEnabled(rewriteInfo("gpt-4o", "claude-sonnet-4-5", true)))
+	})
+}
+
+func TestRewriteResponseModelField(t *testing.T) {
+	tests := []struct {
+		name   string
+		info   *relaycommon.RelayInfo
+		input  string
+		expect string
+	}{
+		{
+			name:   "switch off leaves bytes untouched",
+			info:   rewriteInfo("gpt-4o", "claude-sonnet-4-5", false),
+			input:  `{"model":"claude-sonnet-4-5","choices":[]}`,
+			expect: `{"model":"claude-sonnet-4-5","choices":[]}`,
+		},
+		{
+			name:   "empty text",
+			info:   rewriteInfo("gpt-4o", "claude-sonnet-4-5", true),
+			input:  "",
+			expect: "",
+		},
+		{
+			name:   "top-level model rewritten and nothing else",
+			info:   rewriteInfo("gpt-4o", "claude-sonnet-4-5", true),
+			input:  `{"model":"claude-sonnet-4-5","choices":[{"message":{"content":"I am claude-sonnet-4-5"}}]}`,
+			expect: `{"model":"gpt-4o","choices":[{"message":{"content":"I am claude-sonnet-4-5"}}]}`,
+		},
+		{
+			name:   "gemini modelVersion rewritten",
+			info:   rewriteInfo("gemini-pro-alias", "gemini-2.5-pro", true),
+			input:  `{"modelVersion":"gemini-2.5-pro","candidates":[]}`,
+			expect: `{"modelVersion":"gemini-pro-alias","candidates":[]}`,
+		},
+		{
+			name:   "claude message.model rewritten",
+			info:   rewriteInfo("gpt-4o", "claude-sonnet-4-5", true),
+			input:  `{"type":"message_start","message":{"model":"claude-sonnet-4-5"}}`,
+			expect: `{"type":"message_start","message":{"model":"gpt-4o"}}`,
+		},
+		{
+			name:   "responses response.model rewritten",
+			info:   rewriteInfo("gpt-4o", "claude-sonnet-4-5", true),
+			input:  `{"type":"response.created","response":{"model":"claude-sonnet-4-5"}}`,
+			expect: `{"type":"response.created","response":{"model":"gpt-4o"}}`,
+		},
+		{
+			name:   "absent model field is not added",
+			info:   rewriteInfo("gpt-4o", "claude-sonnet-4-5", true),
+			input:  `{"choices":[]}`,
+			expect: `{"choices":[]}`,
+		},
+		{
+			name:   "non-json sentinel returned unchanged",
+			info:   rewriteInfo("gpt-4o", "claude-sonnet-4-5", true),
+			input:  "[DONE]",
+			expect: "[DONE]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expect, RewriteResponseModelField(tt.info, tt.input))
+		})
+	}
+}
+
+func TestMaskResponseTextComposesRewriteAndMask(t *testing.T) {
+	t.Run("rewrite only leaves content untouched", func(t *testing.T) {
+		info := rewriteInfo("gpt-4o", "claude-sonnet-4-5", true)
+		input := `{"model":"claude-sonnet-4-5","choices":[{"message":{"content":"I am claude-sonnet-4-5"}}]}`
+		expect := `{"model":"gpt-4o","choices":[{"message":{"content":"I am claude-sonnet-4-5"}}]}`
+		assert.Equal(t, expect, MaskResponseText(info, input))
+	})
+	t.Run("neither active returns input byte for byte", func(t *testing.T) {
+		info := rewriteInfo("gpt-4o", "claude-sonnet-4-5", false)
+		input := `{"model":"claude-sonnet-4-5","choices":[{"message":{"content":"I am claude-sonnet-4-5"}}]}`
+		assert.Equal(t, input, MaskResponseText(info, input))
+	})
+	t.Run("masking active also rewrites the model field", func(t *testing.T) {
+		info := maskedInfo("gpt-4o", "claude-sonnet-4-5", true)
+		input := `{"model":"claude-sonnet-4-5","choices":[{"message":{"content":"I am claude-sonnet-4-5"}}]}`
+		expect := `{"model":"gpt-4o","choices":[{"message":{"content":"I am gpt-4o"}}]}`
+		assert.Equal(t, expect, MaskResponseText(info, input))
 	})
 }
 

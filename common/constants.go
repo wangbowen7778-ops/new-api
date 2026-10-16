@@ -141,6 +141,18 @@ var PreConsumedQuota = 500
 
 var RetryTimes = 0
 
+// ConcurrencyRetryInterval is the wait between concurrency-limit probes so a
+// saturated channel has a chance to free a slot before the next attempt.
+var ConcurrencyRetryInterval = 100 * time.Millisecond
+
+// ConcurrencyHighPriorityWaitWindow is how long a request keeps probing the
+// highest priority tier (instead of dropping to lower tiers) after a
+// concurrency-limit 429. Fast-but-small high-priority channels free slots
+// continuously, so waiting for one beats running on a slow low-priority
+// channel. 0 restores the previous immediate-fallback behavior. Overridden by
+// the CONCURRENCY_HIGH_PRIORITY_WAIT_WINDOW_MS env var.
+var ConcurrencyHighPriorityWaitWindow = 2 * time.Second
+
 //var RootUserEmail = ""
 
 var IsMasterNode bool

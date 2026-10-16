@@ -48,7 +48,13 @@ const CONFIGURATION_BLOCKS = {
   modelMapping: { section: 'routing', fields: ['model_mapping'] },
   routingStrategy: {
     section: 'routing',
-    fields: ['priority', 'weight', 'test_model', 'auto_ban'],
+    fields: [
+      'priority',
+      'weight',
+      'max_concurrent_requests',
+      'test_model',
+      'auto_ban',
+    ],
   },
   overrideRules: {
     section: 'request',
@@ -59,8 +65,10 @@ const CONFIGURATION_BLOCKS = {
     fields: [
       'force_format',
       'thinking_to_content',
+      'rewrite_response_model',
       'pass_through_body_enabled',
       'responses_websocket_enabled',
+      'video_parsing_enabled',
       'hoist_message_tools',
       'ollama_openai_chat',
       'system_prompt',
@@ -144,6 +152,7 @@ export function getChannelConfigurationState(
     routingStrategy: Boolean(
       values.priority ||
       values.weight ||
+      (values.max_concurrent_requests ?? 0) > 0 ||
       values.test_model?.trim() ||
       (values.auto_ban ?? 1) !== 1
     ),
@@ -154,10 +163,12 @@ export function getChannelConfigurationState(
     requestProcessing: Boolean(
       (values.type === 1 && values.force_format) ||
       values.thinking_to_content ||
+      values.rewrite_response_model ||
       (values.type !== CHANNEL_TYPE_ADVANCED_CUSTOM &&
         values.pass_through_body_enabled) ||
       (supportsResponsesWebSocket(values.type) &&
         values.responses_websocket_enabled) ||
+      values.video_parsing_enabled ||
       values.hoist_message_tools ||
       (values.type === CHANNEL_TYPE_OLLAMA && values.ollama_openai_chat) ||
       values.system_prompt?.trim() ||

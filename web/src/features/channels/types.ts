@@ -84,15 +84,18 @@ export interface ChannelSettings {
   task_extend_plugin_keys?: string[]
   force_format?: boolean
   thinking_to_content?: boolean
+  rewrite_response_model?: boolean
   proxy?: string
   pass_through_body_enabled?: boolean
   responses_websocket_enabled?: boolean
+  video_parsing_enabled?: boolean
   system_prompt?: string
   system_prompt_override?: boolean
   http_protocol?: 'auto' | 'http1' | string
   http2_connection_shards?: number
   hoist_message_tools?: boolean
   tls_insecure_skip_verify?: boolean
+  max_concurrent_requests?: number
 }
 
 export interface ChannelOtherSettings {
