@@ -54,8 +54,7 @@ func handleClaudeFormat(c *gin.Context, data string, info *relaycommon.RelayInfo
 		return fmt.Errorf("expected Claude stream responses, got %T", result.Value)
 	}
 	for _, resp := range claudeResponses {
-		helper.MaskClaudeResponse(info, resp)
-		_ = helper.ClaudeData(c, *resp)
+		helper.ClaudeData(c, *resp)
 	}
 	return nil
 }
@@ -75,7 +74,7 @@ func handleGeminiFormat(c *gin.Context, data string, info *relaycommon.RelayInfo
 	if err != nil {
 		return err
 	}
-	return sendGeminiStreamResults(c, info, results)
+	return sendGeminiStreamResults(c, results)
 }
 
 func chatToGeminiStreamState(info *relaycommon.RelayInfo, streamResponse *dto.ChatCompletionsStreamResponse) (*relayconvert.ResponseStreamState, error) {
@@ -101,7 +100,7 @@ func chatToGeminiStreamState(info *relaycommon.RelayInfo, streamResponse *dto.Ch
 	return state, nil
 }
 
-func sendGeminiStreamResults(c *gin.Context, info *relaycommon.RelayInfo, results []relayconvert.ResponseResult) error {
+func sendGeminiStreamResults(c *gin.Context, results []relayconvert.ResponseResult) error {
 	for _, result := range results {
 		geminiResponse, ok := result.Value.(*dto.GeminiChatResponse)
 		if !ok {
@@ -115,7 +114,7 @@ func sendGeminiStreamResults(c *gin.Context, info *relaycommon.RelayInfo, result
 			logger.LogError(c, common.LogText("failed to marshal gemini response: %s", err.Error()))
 			return err
 		}
-		c.Render(-1, common.CustomEvent{Data: "data: " + helper.MaskResponseText(info, string(data))})
+		c.Render(-1, common.CustomEvent{Data: "data: " + string(data)})
 		_ = helper.FlushWriter(c)
 	}
 	return nil
@@ -195,17 +194,10 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 	responseId string, createAt int64, model string, systemFingerprint string,
 	usage *dto.Usage, containStreamUsage bool) {
 
-	// Model mapping disguise: rewrite the real upstream model name in the
-	// final chunk before format conversion or write-out; the channel's
-	// response-model rewrite switch is honored in the same call.
-	lastStreamData = helper.MaskResponseText(info, lastStreamData)
-
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
 		if info.ShouldIncludeUsage && !containStreamUsage {
-			// Model mapping disguise: the usage envelope must claim the mapped
-			// model name, not the real upstream one.
-			response := helper.GenerateFinalUsageResponse(responseId, createAt, helper.MaskClaimedModel(info, model), *usage)
+			response := helper.GenerateFinalUsageResponse(responseId, createAt, model, *usage)
 			response.SetSystemFingerprint(systemFingerprint)
 			helper.ObjectData(c, response)
 		}
@@ -231,7 +223,6 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 			return
 		}
 		for _, resp := range claudeResponses {
-			helper.MaskClaudeResponse(info, resp)
 			_ = helper.ClaudeData(c, *resp)
 		}
 		info.ClaudeConvertInfo.Done = true
@@ -255,7 +246,7 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 			common.SysLog(common.LogText("error converting final Gemini stream response: %s", err.Error()))
 			return
 		}
-		if err := sendGeminiStreamResults(c, info, results); err != nil {
+		if err := sendGeminiStreamResults(c, results); err != nil {
 			common.SysLog(common.LogText("error sending final Gemini stream response: %s", err.Error()))
 			return
 		}
@@ -265,15 +256,8 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 			common.SysLog(common.LogText("error finalizing Gemini stream response: %s", err.Error()))
 			return
 		}
-		if err := sendGeminiStreamResults(c, info, results); err != nil {
+		if err := sendGeminiStreamResults(c, results); err != nil {
 			common.SysLog(common.LogText("error sending finalized Gemini stream response: %s", err.Error()))
 		}
 	}
-}
-
-func sendResponsesStreamData(c *gin.Context, info *relaycommon.RelayInfo, streamResponse dto.ResponsesStreamResponse, data string) {
-	if data == "" {
-		return
-	}
-	_ = helper.ResponseChunkData(c, streamResponse, helper.MaskResponseText(info, data))
 }

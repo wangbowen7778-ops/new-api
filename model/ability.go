@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -115,6 +116,15 @@ func GetChannel(
 		return nil, err
 	}
 	abilities, channelsByID := filterAbilitiesByConstraintsWithChannels(abilities, model, filters)
+	// Like the memory cache, retry with the routing name (for example without
+	// @ modifiers) when no channel serves the exact name.
+	if normalized := ratio_setting.RoutingMatchModelName(model); len(abilities) == 0 && normalized != "" && normalized != model {
+		err = DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, normalized, true).Order("priority DESC, weight DESC").Find(&abilities).Error
+		if err != nil {
+			return nil, err
+		}
+		abilities, channelsByID = filterAbilitiesByConstraintsWithChannels(abilities, model, filters)
+	}
 	if len(abilities) > 0 {
 		// A fail-open lookup leaves channelsByID nil, so the lanes are unknown;
 		// keeping the preference off there preserves the historical tier order
@@ -425,5 +435,6 @@ func FixAbility() (int, int, error) {
 		}
 	}
 	InitChannelCache()
+	BumpSyncTopic(SyncTopicChannels)
 	return successCount, failCount, nil
 }
