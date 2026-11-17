@@ -306,19 +306,24 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 		return nil, err
 	}
 	var keys jsonModelKeyCounter
+	var videoDetected bool
 	if storage.IsDisk() {
+		// Disk bodies must stream: validate the JSON and scan for video part
+		// markers through a tee, never materializing the payload in memory.
+		scanner := &videoKeywordScanner{}
 		reader, err := storage.NewReader()
 		if err != nil {
 			return nil, err
 		}
 		defer reader.Close()
-		valid, err := ojson.ValidReader(io.TeeReader(reader, &keys))
+		valid, err := ojson.ValidReader(io.TeeReader(reader, io.MultiWriter(&keys, scanner)))
 		if err != nil {
 			return nil, err
 		}
 		if !valid {
 			return nil, errors.New("invalid JSON request body")
 		}
+		videoDetected = scanner.Detected()
 	} else {
 		requestBody, err := storage.Bytes()
 		if err != nil {
@@ -328,6 +333,7 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 			return nil, errors.New("invalid JSON request body")
 		}
 		_, _ = keys.Write(requestBody)
+		videoDetected = RequestContainsVideo(requestBody)
 	}
 	if keys.count > 1 {
 		return nil, errors.New("model must be provided once")
@@ -336,12 +342,7 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	videoBody, err := storage.Bytes()
-	if err != nil {
-		return nil, err
-	}
-	videoDetected := RequestContainsVideo(videoBody)
-	logger.LogDebug(c, "json body video detect: bodyLen=%d containsVideo=%v", len(videoBody), videoDetected)
+	logger.LogDebug(c, "json body video detect: containsVideo=%v", videoDetected)
 	model, err := getJSONStringValue(values[0], "model")
 	if err != nil {
 		return nil, err
@@ -359,7 +360,7 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	return &ModelRequest{
 		Model:         model,
 		Group:         group,
-		ContainsVideo: RequestContainsVideo(videoBody),
+		ContainsVideo: videoDetected,
 	}, nil
 }
 
@@ -377,6 +378,35 @@ func RequestContainsVideo(requestBody []byte) bool {
 		return true
 	}
 	return bodyContentHasVideoPart(gjson.GetBytes(requestBody, "input"))
+}
+
+// videoKeywordScanner streams through a request body and flags the video part
+// markers ("video_url", "input_video") without holding the payload in memory.
+// It backs video classification for disk-spilled bodies, where reading the
+// whole body into a byte slice would defeat the disk-spill design. The scan is
+// substring based, so a message that merely mentions "video_url" in its text
+// would also classify as video — acceptable, since the video lane can still
+// serve plain text and the memory-path classification stays exact.
+type videoKeywordScanner struct {
+	buf      []byte
+	detected bool
+}
+
+func (s *videoKeywordScanner) Detected() bool { return s.detected }
+
+func (s *videoKeywordScanner) Write(data []byte) (int, error) {
+	if s.detected {
+		return len(data), nil
+	}
+	s.buf = append(s.buf, data...)
+	if len(s.buf) > 48 {
+		s.buf = s.buf[len(s.buf)-48:]
+	}
+	hay := string(s.buf)
+	if strings.Contains(hay, "\"video_url\"") || strings.Contains(hay, "\"input_video\"") {
+		s.detected = true
+	}
+	return len(data), nil
 }
 
 func bodyContentHasVideoPart(items gjson.Result) bool {
