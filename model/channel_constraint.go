@@ -7,11 +7,16 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 )
 
+// filterEvalOrder lists the filter kinds that act as predicates, first
+// violation first. FilterNonVideoPreferred is deliberately absent: it is an
+// ordering preference, not a predicate, and is consumed by buildPriorityTiers
+// instead so video channels stay selectable behind the non-video tiers.
 var filterEvalOrder = []dto.ChannelFilterKind{
 	dto.FilterRequestPath,
 	dto.FilterTaskPluginIdentity,
 	dto.FilterResponsesWebSocket,
 	dto.FilterRequestContainsVideo,
+	dto.FilterExcludeChannels,
 }
 
 // ChannelSatisfiesFilters reports whether ch passes every filter.
@@ -127,6 +132,8 @@ func channelMatchesFilter(ch *Channel, modelName string, filter dto.ChannelFilte
 		}
 	case dto.FilterRequestContainsVideo:
 		return ch.GetSetting().VideoParsingEnabled
+	case dto.FilterExcludeChannels:
+		return !slices.Contains(filter.ChannelIDs, ch.Id)
 	default:
 		return true
 	}

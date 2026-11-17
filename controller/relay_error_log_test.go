@@ -70,6 +70,8 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	apiErr := types.NewOpenAIError(errors.New("upstream failed"), types.ErrorCodeBadResponseStatusCode, http.StatusBadGateway)
 
 	processChannelError(ctx, channelSnapshot, apiErr, nil)
+	// Error logs are written by the background writer; wait for it before reading.
+	require.True(t, model.WaitLogQueueDrained(2*time.Second), "error log must reach the database")
 
 	var stored model.Log
 	require.NoError(t, database.First(&stored).Error)

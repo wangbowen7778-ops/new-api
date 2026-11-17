@@ -3053,6 +3053,7 @@
     "Has been disabled": "已停用",
     "Has been enabled": "已啟用",
     "Has been invalidated": "已作廢",
+    "Hash": "雜湊",
     "Have a Code?": "有兌換碼嗎？",
     "Header": "請求頭",
     "header instead.": " 請求頭。",
@@ -6050,6 +6051,7 @@
     "Storage": "儲存",
     "Store": "店鋪",
     "Store + product created": "店鋪和產品已建立",
+    "Store a digest instead of the raw value in the cache key": "快取鍵中儲存摘要，而非原始值",
     "Store ID": "商店 ID",
     "Store ID is required": "商店 ID 為必填項",
     "Stored configuration with effective defaults": "已儲存的設定及生效預設值",
@@ -7459,5 +7461,9 @@
     "Zoom": "縮放",
     "Max Concurrent Requests": "最大並發請求數",
     "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "該渠道允許的最大並發處理請求數。0 表示不限制。"
-  }
+  },
+  "Channel 429 Policies": "渠道 429 策略",
+  "Channel 429 policies must be a JSON array": "渠道 429 策略必須是 JSON 陣列",
+  "Channel 429 policies must be valid JSON": "渠道 429 策略必須是有效的 JSON",
+  "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "將上游 429 錯誤關鍵詞映射到策略。action：retry（冷卻後切換渠道）、retry_no_cooldown（立即切渠道、不冷卻）、cooldown_only（快速失敗）或 wait_retry（原地等待上游 retry_after 後重試同一渠道，受 wait_max_seconds 封頂）。未命中的 429 保持內置的 3s-60s 重試冷卻。"
 }

@@ -3053,6 +3053,7 @@
     "Has been disabled": "Đã vô hiệu hóa thành công",
     "Has been enabled": "Đã kích hoạt thành công",
     "Has been invalidated": "Đã vô hiệu hóa thành công",
+    "Hash": "Băm",
     "Have a Code?": "Có mã không?",
     "Header": "Header",
     "header instead.": ".",
@@ -6050,6 +6051,7 @@
     "Storage": "Lưu trữ",
     "Store": "Store",
     "Store + product created": "Đã tạo cửa hàng + sản phẩm",
+    "Store a digest instead of the raw value in the cache key": "Lưu bản băm thay vì giá trị gốc trong khóa bộ nhớ đệm",
     "Store ID": "Mã cửa hàng",
     "Store ID is required": "Bắt buộc nhập Store ID",
     "Stored configuration with effective defaults": "Cấu hình đã lưu và giá trị mặc định có hiệu lực",
@@ -7459,5 +7461,9 @@
     "Zoom": "Zoom",
     "Max Concurrent Requests": "Số yêu cầu đồng thời tối đa",
     "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "Số yêu cầu đồng thời tối đa của kênh này. 0 = không giới hạn."
-  }
+  },
+  "Channel 429 Policies": "Chính sách 429 kênh",
+  "Channel 429 policies must be a JSON array": "Chính sách 429 kênh phải là mảng JSON",
+  "Channel 429 policies must be valid JSON": "Chính sách 429 kênh phải là JSON hợp lệ",
+  "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "Ánh xạ từ khóa lỗi 429 của thượng nguồn sang chiến lược. action: retry (hồi rồi chuyển kênh), retry_no_cooldown (chuyển ngay, không hồi), cooldown_only (thất bại nhanh) hoặc wait_retry (chờ trên cùng kênh cho retry_after của thượng nguồn, giới hạn bởi wait_max_seconds). 429 không khớp giữ hồi thử lại mặc định 3s-60s."
 }

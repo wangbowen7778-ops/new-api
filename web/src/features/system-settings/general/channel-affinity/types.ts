@@ -20,6 +20,7 @@ export interface KeySource {
   type: 'context_int' | 'context_string' | 'request_header' | 'gjson'
   key?: string
   path?: string
+  hash?: boolean
 }
 
 export type SessionMode = 'off' | 'prefer' | 'strict'

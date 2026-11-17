@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/cachex"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -22,6 +23,7 @@ import (
 
 const (
 	ginKeyChannelAffinityCacheKey   = "channel_affinity_cache_key"
+	ginKeyChannelAffinitySelected   = "channel_affinity_selected"
 	ginKeyChannelAffinityTTLSeconds = "channel_affinity_ttl_seconds"
 	ginKeyChannelAffinityMeta       = "channel_affinity_meta"
 	ginKeyChannelAffinityLogInfo    = "channel_affinity_log_info"
@@ -586,6 +588,10 @@ func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup 
 		if rule.ValueRegex != "" && !matchAnyRegexCached([]string{rule.ValueRegex}, affinityValue) {
 			continue
 		}
+		// value_regex matches the extracted text, so hashing happens after it.
+		if usedSource.Hash {
+			affinityValue = common.Sha1([]byte(affinityValue))[:16]
+		}
 
 		ttlSeconds := rule.TTLSeconds
 		if ttlSeconds <= 0 {
@@ -621,12 +627,31 @@ func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup 
 			common.SysError(common.LogText("channel affinity cache get failed: key=%s, err=%v", cacheKeyFull, err))
 			return 0, false
 		}
+		// A shared key makes every request of the deployment land on one
+		// channel, and nothing outside can tell which key source produced it.
+		// DEBUG shows the rule, the winning source and the fingerprint.
+		logger.LogDebug(c, "affinity: rule=%s source=%s fp=%s key=%s hit=%v channel=%d",
+			rule.Name, usedSource.Type, affinityFingerprint(affinityValue), cacheKeySuffix, found, channelID)
 		if found {
 			return channelID, true
 		}
 		return 0, false
 	}
 	return 0, false
+}
+
+// AffinitySelectedForRequest reports whether this attempt is riding a session
+// affinity binding. Such requests are exempt from the per-channel concurrency
+// cap: the binding's entire value is the warm upstream cache, and a concurrency
+// denial would throw that cache away to enforce a limit that exists only to
+// protect arrivals without one.
+func AffinitySelectedForRequest(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	v, ok := c.Get(ginKeyChannelAffinitySelected)
+	b, _ := v.(bool)
+	return ok && b
 }
 
 func ShouldSkipRetryAfterChannelAffinityFailure(c *gin.Context) bool {

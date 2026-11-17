@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"sort"
 	"strings"
 	"sync"
 
@@ -115,27 +114,39 @@ func GetChannel(
 	if err != nil {
 		return nil, err
 	}
-	abilities = filterAbilitiesByConstraints(abilities, model, filters)
+	abilities, channelsByID := filterAbilitiesByConstraintsWithChannels(abilities, model, filters)
 	if len(abilities) > 0 {
-		priorities := make([]int64, 0)
-		seen := make(map[int64]bool)
+		// A fail-open lookup leaves channelsByID nil, so the lanes are unknown;
+		// keeping the preference off there preserves the historical tier order
+		// instead of mistaking every channel for non-video.
+		preferNonVideo := channelsByID != nil && requestsNonVideoPreference(filters)
+		candidates := make([]channelTier, 0, len(abilities))
 		for _, ability := range abilities {
 			priority := int64(0)
 			if ability.Priority != nil {
 				priority = *ability.Priority
 			}
-			if !seen[priority] {
-				seen[priority] = true
-				priorities = append(priorities, priority)
-			}
+			channel := channelsByID[ability.ChannelId]
+			candidates = append(candidates, channelTier{
+				priority: priority,
+				video:    channel != nil && channel.GetSetting().VideoParsingEnabled,
+			})
 		}
-		sort.Slice(priorities, func(i, j int) bool { return priorities[i] > priorities[j] })
-		if retry >= len(priorities) {
-			retry = len(priorities) - 1
+		tiers := buildPriorityTiers(candidates, preferNonVideo)
+		if retry >= len(tiers) {
+			retry = len(tiers) - 1
 		}
-		targetPriority := priorities[retry]
+		targetTier := tiers[retry]
 		abilities = lo.Filter(abilities, func(ability Ability, _ int) bool {
-			return ability.Priority == nil && targetPriority == 0 || ability.Priority != nil && *ability.Priority == targetPriority
+			priority := int64(0)
+			if ability.Priority != nil {
+				priority = *ability.Priority
+			}
+			if priority != targetTier.priority {
+				return false
+			}
+			channel := channelsByID[ability.ChannelId]
+			return targetTier.matchesChannel(channel != nil && channel.GetSetting().VideoParsingEnabled)
 		})
 	}
 	channel := Channel{}
@@ -166,8 +177,16 @@ func GetChannel(
 // predicate used by the memory-cache path. A failed channel lookup fails
 // closed when a task-plugin identity is required and fails open otherwise.
 func filterAbilitiesByConstraints(abilities []Ability, modelName string, filters []dto.ChannelFilter) []Ability {
+	filtered, _ := filterAbilitiesByConstraintsWithChannels(abilities, modelName, filters)
+	return filtered
+}
+
+// filterAbilitiesByConstraintsWithChannels is filterAbilitiesByConstraints
+// plus the loaded channels, so the caller can order priority tiers by lane
+// without a second lookup. The channel map is nil on the fail-open path.
+func filterAbilitiesByConstraintsWithChannels(abilities []Ability, modelName string, filters []dto.ChannelFilter) ([]Ability, map[int]*Channel) {
 	if len(abilities) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	channelIds := make([]int, 0, len(abilities))
@@ -183,9 +202,9 @@ func filterAbilitiesByConstraints(abilities []Ability, modelName string, filters
 	var channels []*Channel
 	if err := DB.Where("id IN ?", channelIds).Find(&channels).Error; err != nil {
 		if identityFilterRequiresKey(filters) {
-			return nil
+			return nil, nil
 		}
-		return abilities
+		return abilities, nil
 	}
 
 	channelsByID := make(map[int]*Channel, len(channels))
@@ -200,7 +219,7 @@ func filterAbilitiesByConstraints(abilities []Ability, modelName string, filters
 			filtered = append(filtered, ability)
 		}
 	}
-	return filtered
+	return filtered, channelsByID
 }
 
 func identityFilterRequiresKey(filters []dto.ChannelFilter) bool {

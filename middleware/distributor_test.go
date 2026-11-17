@@ -342,7 +342,7 @@ func TestSharedEndpointRebindsToBoundNewAPIExtension(t *testing.T) {
 	assert.Equal(t, "alpha", c.MustGet(jsplugin.ContextKeyPinnedEndpoint).(jsplugin.PinnedEndpoint).Plugin.Meta.Key)
 }
 
-func TestBodyContainsVideoPart(t *testing.T) {
+func TestRequestContainsVideo(t *testing.T) {
 	tests := []struct {
 		name string
 		body string
@@ -374,8 +374,18 @@ func TestBodyContainsVideoPart(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "http video_url link not treated as video",
+			name: "http video_url link treated as video",
 			body: `{"model":"gpt-4o","messages":[{"role":"user","content":[{"type":"video_url","video_url":{"url":"https://example.com/v.mp4"}}]}]}`,
+			want: true,
+		},
+		{
+			name: "responses input_video http link detected",
+			body: `{"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_video","video_url":{"url":"https://example.com/v.mp4"}}]}]}`,
+			want: true,
+		},
+		{
+			name: "empty video_url not detected",
+			body: `{"model":"gpt-4o","messages":[{"role":"user","content":[{"type":"video_url","video_url":{"url":""}}]}]}`,
 			want: false,
 		},
 		{
@@ -388,10 +398,72 @@ func TestBodyContainsVideoPart(t *testing.T) {
 			body: `{"model":"claude","messages":[{"role":"user","content":[{"type":"image","source":{"type":"base64","data":"AAAA"}}]}]}`,
 			want: false,
 		},
+		{
+			name: "responses input_video part detected",
+			body: `{"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_video","video_url":{"url":"data:video/mp4;base64,AAAA"}}]}]}`,
+			want: true,
+		},
+		{
+			name: "responses input_video bare string url detected",
+			body: `{"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_video","video_url":"data:video/mp4;base64,AAAA"}]}]}`,
+			want: true,
+		},
+		{
+			name: "responses input_image not treated as video",
+			body: `{"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_image","image_url":"data:image/png;base64,AAAA"}]}]}`,
+			want: false,
+		},
+		{
+			name: "responses string input not detected",
+			body: `{"model":"gpt-5","input":"hello"}`,
+			want: false,
+		},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.want, bodyContainsVideoPart([]byte(testCase.body)))
+			assert.Equal(t, testCase.want, RequestContainsVideo([]byte(testCase.body)))
+		})
+	}
+}
+
+// getModelRequest must carry ContainsVideo from the parsed request, otherwise
+// the video-channel hard filter never engages.
+func TestGetModelRequestPropagatesContainsVideo(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{
+			name: "base64 video_url propagates",
+			body: `{"model":"kimi-k3","messages":[{"role":"user","content":[{"type":"video_url","video_url":{"url":"data:video/mp4;base64,AAAA"}}]}]}`,
+			want: true,
+		},
+		{
+			name: "http video_url propagates",
+			body: `{"model":"kimi-k3","messages":[{"role":"user","content":[{"type":"video_url","video_url":{"url":"https://example.com/v.mp4"}}]}]}`,
+			want: true,
+		},
+		{
+			name: "text-only request stays false",
+			body: `{"model":"kimi-k3","messages":[{"role":"user","content":"hello"}]}`,
+			want: false,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
+				bytes.NewBufferString(testCase.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			modelRequest, _, err := getModelRequest(c)
+			require.NoError(t, err)
+			require.NotNil(t, modelRequest)
+			assert.Equal(t, testCase.want, modelRequest.ContainsVideo)
 		})
 	}
 }

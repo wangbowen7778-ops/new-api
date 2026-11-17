@@ -3053,6 +3053,7 @@
     "Has been disabled": "Disabled successfully",
     "Has been enabled": "Enabled successfully",
     "Has been invalidated": "Invalidated successfully",
+    "Hash": "Hash",
     "Have a Code?": "Have a Code?",
     "Header": "Header",
     "header instead.": "header instead.",
@@ -6050,6 +6051,7 @@
     "Storage": "Storage",
     "Store": "Store",
     "Store + product created": "Store + product created",
+    "Store a digest instead of the raw value in the cache key": "Store a digest instead of the raw value in the cache key",
     "Store ID": "Store ID",
     "Store ID is required": "Store ID is required",
     "Stored configuration with effective defaults": "Stored configuration with effective defaults",
@@ -7459,5 +7461,9 @@
     "Zoom": "Zoom",
     "Max Concurrent Requests": "Max Concurrent Requests",
     "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "Maximum concurrent in-flight requests for this channel. 0 = unlimited."
-  }
+  },
+  "Channel 429 Policies": "Channel 429 Policies",
+  "Channel 429 policies must be a JSON array": "Channel 429 policies must be a JSON array",
+  "Channel 429 policies must be valid JSON": "Channel 429 policies must be valid JSON",
+  "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown."
 }

@@ -3053,6 +3053,7 @@
     "Has been disabled": "Успешно отключено",
     "Has been enabled": "Успешно включено",
     "Has been invalidated": "Аннулировано",
+    "Hash": "Хеш",
     "Have a Code?": "Есть код?",
     "Header": "Заголовок",
     "header instead.": ".",
@@ -6050,6 +6051,7 @@
     "Storage": "Хранилище",
     "Store": "Store",
     "Store + product created": "Магазин и продукт созданы",
+    "Store a digest instead of the raw value in the cache key": "Хранить хеш вместо исходного значения в ключе кеша",
     "Store ID": "ID магазина",
     "Store ID is required": "Требуется ID магазина",
     "Stored configuration with effective defaults": "Сохранённые настройки и действующие значения",
@@ -7459,5 +7461,9 @@
     "Zoom": "Zoom",
     "Max Concurrent Requests": "Макс. одновременных запросов",
     "Maximum concurrent in-flight requests for this channel. 0 = unlimited.": "Максимальное число одновременных запросов для канала. 0 — без ограничения."
-  }
+  },
+  "Channel 429 Policies": "Политики 429 каналов",
+  "Channel 429 policies must be a JSON array": "Политики 429 каналов должны быть массивом JSON",
+  "Channel 429 policies must be valid JSON": "Политики 429 каналов должны быть корректным JSON",
+  "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "Сопоставьте ключевые слова ошибок 429 апстрима со стратегией. action: retry (охлаждение, затем переключение), retry_no_cooldown (немедленное переключение, без охлаждения), cooldown_only (быстрый отказ) или wait_retry (ожидание на том же канале для retry_after апстрима, ограничено wait_max_seconds). Несопоставленные 429 сохраняют встроенное охлаждение 3-60 с."
 }

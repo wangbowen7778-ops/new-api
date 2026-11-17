@@ -141,6 +141,11 @@ func MarkRequestPolicySuccess(c *gin.Context, stream *relaycommon.StreamStatus) 
 	if c != nil {
 		channelID = c.GetInt("channel_id")
 	}
+	if state.Successful {
+		// A success ends any refusal streak, so the next failure restarts the
+		// cooldown doubling from its base instead of from the last streak.
+		model.NoteChannelHealthy(channelID)
+	}
 	state.AddEvent(PolicyEvent{ChannelID: channelID, Decision: decision})
 }
 

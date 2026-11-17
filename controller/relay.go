@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -169,6 +170,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	switchBudget := int64(-1)
 	switchProbe := 0
 	tierCount := 0
+	// waitRetryUsed grants at most one same-channel wait per request: after
+	// that a still-429ing channel falls through to the normal switch path.
+	waitRetryUsed := false
 	for ; retryParam.GetRetry() <= common.RetryTimes || switchBudget > 0; retryParam.IncreaseRetry() {
 		if retryParam.GetRetry() > common.RetryTimes && switchBudget > 0 {
 			switchBudget--
@@ -180,10 +184,26 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if retryParam.GetRetry() > 0 {
 			time.Sleep(common.ConcurrencyRetryInterval)
 		}
+		// A retry must not draw the channel that just failed again: without
+		// this the request can spend its whole switch budget on the same
+		// channel and hand the upstream error back to the caller.
+		if retryParam.GetRetry() > 0 {
+			retryParam.ExcludeChannelIDs = retryParam.ExcludeChannelIDs[:0]
+			for _, usedChannel := range c.GetStringSlice("use_channel") {
+				if channelID, parseErr := strconv.Atoi(usedChannel); parseErr == nil {
+					retryParam.ExcludeChannelIDs = append(retryParam.ExcludeChannelIDs, channelID)
+				}
+			}
+		}
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
-			newAPIError = channelErr
+			// Keep the upstream error the request already holds: running out of
+			// untried channels is the normal end of the refusal switch loop, and
+			// replacing it with "no available channel" would hide the reason.
+			if newAPIError == nil {
+				newAPIError = channelErr
+			}
 			break
 		}
 		service.AppendUsedChannel(c, channel.Id)
@@ -206,7 +226,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		runAttempt := func() *types.NewAPIError {
 			channelSettings, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
-			release, ok := service.AcquireChannelConcurrency(channel.Id, int64(channelSettings.MaxConcurrentRequests))
+			// Affinity-bound requests ride past the per-channel concurrency cap:
+			// the binding exists so the upstream cache stays warm, and denying
+			// them would shed exactly the traffic that benefits from it. The cap
+			// keeps gating arrivals without a binding.
+			limit := int64(channelSettings.MaxConcurrentRequests)
+			if service.AffinitySelectedForRequest(c) {
+				limit = 0
+			}
+			release, ok := service.AcquireChannelConcurrency(channel.Id, limit)
 			if !ok {
 				// Status 429 keeps the retry loop switching to another channel;
 				// the code must stay a non-"channel:" error so the channel is
@@ -245,7 +273,98 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		decision := service.DecideRelayRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry())
+		// wait_retry policy: an upstream 429 with a wait hint parks THIS request
+		// on the same channel for min(retry_after, policy ceiling) and retries
+		// it, so the session's warm cache is not shed to another channel. One
+		// wait per request; past that the normal switch path takes over.
+		if newAPIError.StatusCode == http.StatusTooManyRequests && !waitRetryUsed {
+			matched, matchedOK := operation_setting.MatchChannel429Policy(newAPIError.Error())
+			logger.LogWarn(c, common.LogText("429 policy probe: matched=%v action=%q dump=%s err=%.140s",
+				matchedOK, matched.Action, operation_setting.DebugDump429Policies(), newAPIError.Error()))
+			if matchedOK && matched.Action == operation_setting.Channel429ActionWaitRetry {
+				waitRetryUsed = true
+				wait := matched.WaitMaxSeconds
+				if hint := newAPIError.RetryAfterSeconds; hint > 0 && hint < wait {
+					wait = hint
+				}
+				logger.LogWarn(c, common.LogText(
+					"upstream 429 with wait_retry policy: waiting %ds before retrying channel #%d",
+					wait, channel.Id))
+				select {
+				case <-time.After(time.Duration(wait) * time.Second):
+				case <-c.Request.Context().Done():
+					return
+				}
+				// Withdraw this channel from the used list so the next
+				// selection may return to it.
+				current := fmt.Sprintf("%d", channel.Id)
+				used := c.GetStringSlice("use_channel")
+				kept := used[:0:0]
+				for _, u := range used {
+					if u != current {
+						kept = append(kept, u)
+					}
+				}
+				c.Set("use_channel", kept)
+				retryParam.SetRetry(retryParam.GetRetry() - 1) // cancel this loop's IncreaseRetry
+				if attemptErr := runAttempt(); attemptErr == nil {
+					service.MarkRequestPolicySuccess(c, relayInfo.StreamStatus)
+					relayInfo.LastError = nil
+					return
+				} else {
+					newAPIError = attemptErr
+				}
+				continue // still failing: normal decision/cooldown/switch path
+			}
+		}
+		// Park the channel so concurrent requests stop probing a failure that
+		// will not clear on its own. Each attempt against a broken channel costs
+		// the client the full failure latency before the retry moves on, so
+		// without the park every later request pays that cost again — multiplied
+		// by however many channels are in the same broken state.
+		upstream429 := newAPIError.StatusCode == http.StatusTooManyRequests && newAPIError.GetErrorCode() != types.ErrorCodeConcurrencyLimit
+		if newAPIError.GetErrorCode() != types.ErrorCodeConcurrencyLimit {
+			switch {
+			case upstream429:
+				// A configured retry_no_cooldown policy reports zero: the
+				// channel goes straight back into the pool and only this
+				// request switches away.
+				if base := service.Upstream429Cooldown(newAPIError); base > 0 {
+					limit := common.UpstreamRateLimitMaxCooldown
+					if base >= common.UpstreamQuotaCooldown {
+						limit = common.UpstreamQuotaMaxCooldown
+					}
+					model.MarkChannelCooldownBackoff(channel.Id, base, limit)
+				}
+			case newAPIError.StatusCode >= 500 && newAPIError.StatusCode <= 599:
+				model.MarkChannelCooldownBackoff(channel.Id, common.UpstreamServerErrorCooldown, common.UpstreamServerErrorMaxCooldown)
+			case newAPIError.StatusCode == http.StatusPaymentRequired:
+				// An empty balance behaves like an exhausted quota: no point
+				// re-probing it until an operator tops the account up.
+				model.MarkChannelCooldownBackoff(channel.Id, common.UpstreamQuotaCooldown, common.UpstreamQuotaMaxCooldown)
+			case newAPIError.StatusCode == http.StatusForbidden:
+				model.MarkChannelCooldownBackoff(channel.Id, common.UpstreamForbiddenCooldown, common.UpstreamForbiddenMaxCooldown)
+			case newAPIError.StatusCode <= 0:
+				// No upstream status at all: the connection failed before a
+				// response existed, so the channel is unreachable.
+				model.MarkChannelCooldownBackoff(channel.Id, common.UpstreamServerErrorCooldown, common.UpstreamServerErrorMaxCooldown)
+			}
+		}
+		// Every switch-worthy failure has to reach a different channel, so
+		// selection ignores priority tiers and treats ExcludeChannelIDs as
+		// strict. Without this an exhausted top tier falls back to the channel
+		// that just failed, the post-selection filter rejects it, and the
+		// request dies on the first error while other channels stay healthy.
+		// The concurrency 429 is excluded: it keeps its own wait-window logic
+		// and deliberately revisits the same tier.
+		if decision.Action == "retry" && newAPIError.GetErrorCode() != types.ErrorCodeConcurrencyLimit {
+			retryParam.SwitchAcrossTiers = true
+		}
 		if newAPIError.GetErrorCode() == types.ErrorCodeConcurrencyLimit {
+			// A saturated channel is healthy but full: park it only briefly so a
+			// concurrent burst stops re-selecting it, while the wait-window
+			// logic below can still return to it once slots free up.
+			model.MarkChannelCooldown(channel.Id, common.ChannelConcurrencyCooldown)
 			// Probe budget = wait-window probes at the top tier + one probe
 			// per lower tier. While the window lasts, the tier index stays at
 			// 0 so freed slots on fast high-priority channels win the probe;
@@ -277,7 +396,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			retryParam.TierOverride = &tier
 			retryParam.PriorityFloor = 0
 			decision = service.PolicyDecision{Action: "retry", Reason: "channel_concurrency_limit", Source: "system"}
-		} else if decision.Action == "retry" && retryParam.GetRetry() >= common.RetryTimes {
+		} else if decision.Action == "retry" && (retryParam.GetRetry() >= common.RetryTimes || upstream429) {
 			// Any other switch-worthy failure (any non-2xx upstream status or
 			// channel error) keeps moving to another channel of the same model
 			// past the retry budget, the same way the concurrency probe does:
@@ -291,11 +410,30 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 					service.GetChannelConstraints(c).Filters,
 				), 1)
 				switchBudget = int64(tierCount)
+				// A cross-tier switch walks channels, not tiers, so its budget
+				// is one probe per candidate channel. Charging it to the tier
+				// count would settle on the first failure as soon as all
+				// channels share a priority.
+				if retryParam.SwitchAcrossTiers {
+					switchBudget = int64(max(model.RetryChannelCount(
+						common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
+						relayInfo.OriginModelName,
+						service.GetChannelConstraints(c).Filters,
+					), tierCount))
+				}
 			}
-			tier := switchProbe % tierCount
-			switchProbe++
-			retryParam.TierOverride = &tier
-			retryParam.PriorityFloor = 0
+			if retryParam.SwitchAcrossTiers {
+				// Cross-tier switching ignores the priority ladder, so the tier
+				// override would only re-pin the attempt that the switch is
+				// trying to escape.
+				retryParam.TierOverride = nil
+				retryParam.PriorityFloor = 0
+			} else {
+				tier := switchProbe % tierCount
+				switchProbe++
+				retryParam.TierOverride = &tier
+				retryParam.PriorityFloor = 0
+			}
 		} else {
 			// A real failure moved the attempt counter down the tiers; keep
 			// probing from the reached tier until a concurrency probe resets

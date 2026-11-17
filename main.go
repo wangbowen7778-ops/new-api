@@ -242,6 +242,8 @@ func main() {
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()
 	}
+	// 后台日志队列落库：错误日志与消费日志用于对账，重启前必须写完
+	model.FlushLogQueue()
 	common.SysLog(common.LogText("server exited"))
 }
 

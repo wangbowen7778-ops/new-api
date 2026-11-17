@@ -100,6 +100,12 @@ type NewAPIError struct {
 	errorCode      ErrorCode
 	StatusCode     int
 	Metadata       json.RawMessage
+
+	// RetryAfterSeconds carries an upstream 429's Retry-After hint (HTTP header
+	// or body field, whichever the adaptor could read). Zero means the upstream
+	// gave no hint. The relay's wait_retry policy uses it to sleep on the same
+	// channel instead of switching away.
+	RetryAfterSeconds int
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.

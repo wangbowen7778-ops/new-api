@@ -19,8 +19,9 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled    bool   `json:"pass_through_body_enabled,omitempty"`
 	ResponsesWebSocketEnabled bool   `json:"responses_websocket_enabled,omitempty"`
 	// VideoParsingEnabled marks the channel as supporting video parsing.
-	// Requests containing video_url content parts are routed only to channels
-	// with this flag; all other requests are unaffected.
+	// Requests containing video content parts are routed only to channels with
+	// this flag. Every other request prefers unmarked channels and falls back to
+	// these only when no unmarked channel is available.
 	VideoParsingEnabled  bool   `json:"video_parsing_enabled,omitempty"`
 	SystemPrompt         string `json:"system_prompt,omitempty"`
 	SystemPromptOverride bool   `json:"system_prompt_override,omitempty"`

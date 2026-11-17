@@ -128,13 +128,38 @@ func GetRandomSatisfiedChannel(
 	channelSyncLock.RLock()
 	defer channelSyncLock.RUnlock()
 
+	// A retry excludes the channels it already attempted. When that exclusion
+	// removes every candidate the request has nowhere left to go, so the
+	// exclusion is dropped: the caller then settles on the upstream error it
+	// already holds instead of replacing it with "no available channel".
+	candidatesFor := func(modelName string) []int {
+		channels, emptiedBy := filterCandidateIDs(group2model2channels[group][modelName], model, filters)
+		if emptiedBy != dto.FilterExcludeChannels {
+			return channels
+		}
+		remaining := make([]dto.ChannelFilter, 0, len(filters))
+		for _, filter := range filters {
+			if filter.Kind != dto.FilterExcludeChannels {
+				remaining = append(remaining, filter)
+			}
+		}
+		channels, _ = filterCandidateIDs(group2model2channels[group][modelName], model, remaining)
+		return channels
+	}
+
 	// First, try to find channels with the exact model name.
-	channels, _ := filterCandidateIDs(group2model2channels[group][model], model, filters)
+	channels := candidatesFor(model)
 
 	// If no channels found, try to find channels with the normalized model name.
 	if len(channels) == 0 {
-		normalizedModel := ratio_setting.RoutingMatchModelName(model)
-		channels, _ = filterCandidateIDs(group2model2channels[group][normalizedModel], model, filters)
+		channels = candidatesFor(ratio_setting.RoutingMatchModelName(model))
+	}
+
+	// A channel parked after an upstream 429 is skipped while it cools down.
+	// The skip is a preference, not a predicate: when every candidate is
+	// parked the request still needs one to settle the refusal on.
+	if kept := dropCoolingChannels(channels); len(kept) > 0 {
+		channels = kept
 	}
 
 	if len(channels) == 0 {
@@ -148,31 +173,27 @@ func GetRandomSatisfiedChannel(
 		return nil, fmt.Errorf("database consistency error: channel #%d does not exist, please contact the administrator", channels[0])
 	}
 
-	uniquePriorities := make(map[int]bool)
+	candidates := make([]channelTier, 0, len(channels))
 	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
-			uniquePriorities[int(channel.GetPriority())] = true
-		} else {
+		channel, ok := channelsIDM[channelId]
+		if !ok {
 			return nil, fmt.Errorf("database consistency error: channel #%d does not exist, please contact the administrator", channelId)
 		}
+		candidates = append(candidates, channelTier{priority: channel.GetPriority(), video: channel.GetSetting().VideoParsingEnabled})
 	}
-	var sortedUniquePriorities []int
-	for priority := range uniquePriorities {
-		sortedUniquePriorities = append(sortedUniquePriorities, priority)
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(sortedUniquePriorities)))
+	tiers := buildPriorityTiers(candidates, requestsNonVideoPreference(filters))
 
-	if retry >= len(uniquePriorities) {
-		retry = len(uniquePriorities) - 1
+	if retry >= len(tiers) {
+		retry = len(tiers) - 1
 	}
-	targetPriority := int64(sortedUniquePriorities[retry])
+	targetTier := tiers[retry]
 
 	// get the priority for the given retry number
 	var sumWeight = 0
 	var targetChannels []*Channel
 	for _, channelId := range channels {
 		if channel, ok := channelsIDM[channelId]; ok {
-			if channel.GetPriority() == targetPriority {
+			if channel.GetPriority() == targetTier.priority && targetTier.matchesChannel(channel.GetSetting().VideoParsingEnabled) {
 				sumWeight += channel.GetWeight()
 				targetChannels = append(targetChannels, channel)
 			}
@@ -182,7 +203,7 @@ func GetRandomSatisfiedChannel(
 	}
 
 	if len(targetChannels) == 0 {
-		return nil, errors.New(fmt.Sprintf("no channel found, group: %s, model: %s, priority: %d", group, model, targetPriority))
+		return nil, errors.New(fmt.Sprintf("no channel found, group: %s, model: %s, priority: %d", group, model, targetTier.priority))
 	}
 
 	// smoothing factor and adjustment
@@ -214,6 +235,148 @@ func GetRandomSatisfiedChannel(
 	}
 	// return null if no channel is not found
 	return nil, errors.New("channel not found")
+}
+
+// pickWeightedChannel draws one channel from channels with the same weighted
+// smoothing the priority-tier selection uses, so switching off a refusal keeps
+// the configured traffic split between otherwise-equivalent channels.
+func pickWeightedChannel(channels []*Channel) (*Channel, error) {
+	if len(channels) == 0 {
+		return nil, nil
+	}
+	var sumWeight = 0
+	for _, channel := range channels {
+		sumWeight += channel.GetWeight()
+	}
+	smoothingFactor := 1
+	smoothingAdjustment := 0
+	if sumWeight == 0 {
+		sumWeight = len(channels) * 100
+		smoothingAdjustment = 100
+	} else if sumWeight/len(channels) < 10 {
+		smoothingFactor = 100
+	}
+	totalWeight := sumWeight * smoothingFactor
+	randomWeight := rand.Intn(totalWeight)
+	for _, channel := range channels {
+		randomWeight -= channel.GetWeight()*smoothingFactor + smoothingAdjustment
+		if randomWeight < 0 {
+			return channel, nil
+		}
+	}
+	return nil, errors.New("channel not found")
+}
+
+// switchCandidatesLocked resolves the candidate ids a switch may still reach.
+// exhausted reports that the list is empty only because every candidate was
+// already attempted by this request. Caller must hold channelSyncLock.
+func switchCandidatesLocked(group string, model string, filters []dto.ChannelFilter) (ids []int, exhausted bool) {
+	lookup := func(modelName string) ([]int, bool) {
+		candidates, emptiedBy := filterCandidateIDs(group2model2channels[group][modelName], model, filters)
+		if emptiedBy == dto.FilterExcludeChannels {
+			return nil, true
+		}
+		return candidates, false
+	}
+
+	ids, exhausted = lookup(model)
+	if exhausted {
+		return nil, true
+	}
+	if len(ids) == 0 {
+		if normalized := ratio_setting.RoutingMatchModelName(model); normalized != "" && normalized != model {
+			if ids, exhausted = lookup(normalized); exhausted {
+				return nil, true
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil, false
+	}
+	if kept := dropCoolingChannels(ids); len(kept) > 0 {
+		ids = kept
+	}
+	return ids, false
+}
+
+// PickChannelForSwitch selects a channel for a retry that has to move off the
+// channel which just refused the request. Unlike GetRandomSatisfiedChannel it
+// ignores priority tiers and treats the exclusion filter as strict:
+//
+//   - Tiers pin an attempt to a single priority level, so a top tier holding
+//     only the channel that just answered 429 is exhausted and the attempt
+//     falls back to that same channel.
+//   - The exclusion filter is where "already attempted by this request" lives.
+//     Falling back to the unfiltered list re-admits the refused channel and
+//     spends the remaining budget re-learning the same refusal.
+//
+// skip, when non-nil, marks channels that cannot take another in-flight
+// request right now (each channel carries its own concurrency cap). Those are
+// passed over while any other candidate remains, because landing on a
+// saturated channel turns the refusal switch into a concurrency wait; when
+// every candidate is saturated they stay eligible, since waiting for a slot
+// beats reporting no channel at all.
+//
+// It returns (nil, nil) once every candidate has been attempted so the caller
+// can settle on the upstream error it already holds.
+func PickChannelForSwitch(group string, model string, filters []dto.ChannelFilter, skip func(*Channel) bool) (*Channel, error) {
+	if !common.MemoryCacheEnabled {
+		return pickChannelForSwitchFromDB(group, model, filters, skip)
+	}
+
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	ids, exhausted := switchCandidatesLocked(group, model, filters)
+	if exhausted || len(ids) == 0 {
+		return nil, nil
+	}
+	channels := make([]*Channel, 0, len(ids))
+	for _, id := range ids {
+		if channel, ok := channelsIDM[id]; ok {
+			channels = append(channels, channel)
+		}
+	}
+	return pickWeightedChannel(dropSaturatedChannels(channels, skip))
+}
+
+// dropSaturatedChannels moves channels flagged by skip out of the draw, keeping
+// them only when nothing else is left.
+func dropSaturatedChannels(channels []*Channel, skip func(*Channel) bool) []*Channel {
+	if skip == nil || len(channels) < 2 {
+		return channels
+	}
+	roomy := make([]*Channel, 0, len(channels))
+	for _, channel := range channels {
+		if !skip(channel) {
+			roomy = append(roomy, channel)
+		}
+	}
+	if len(roomy) == 0 {
+		return channels
+	}
+	return roomy
+}
+
+func pickChannelForSwitchFromDB(group string, model string, filters []dto.ChannelFilter, skip func(*Channel) bool) (*Channel, error) {
+	var abilities []Ability
+	if err := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true).Find(&abilities).Error; err != nil {
+		return nil, err
+	}
+	if len(abilities) == 0 {
+		return nil, nil
+	}
+	abilities, channelsByID := filterAbilitiesByConstraintsWithChannels(abilities, model, filters)
+	if len(abilities) == 0 {
+		return nil, nil
+	}
+	channels := make([]*Channel, 0, len(abilities))
+	for _, ability := range abilities {
+		if channel := channelsByID[ability.ChannelId]; channel != nil {
+			channels = append(channels, channel)
+		}
+	}
+	return pickWeightedChannel(dropSaturatedChannels(channels, skip))
 }
 
 func CacheGetChannel(id int) (*Channel, error) {
@@ -286,6 +449,9 @@ func CacheUpdateChannel(channel *Channel) {
 	if channelsIDM == nil {
 		channelsIDM = make(map[int]*Channel)
 	}
+	// An administrator touched the channel, so it is expected to serve again
+	// even if a previous refusal parked it.
+	ClearChannelCooldown(channel.Id)
 	if oldChannel, ok := channelsIDM[channel.Id]; ok {
 		logger.LogDebug(nil, "CacheUpdateChannel before: id=%d, name=%s, status=%d, polling_index=%d", channel.Id, channel.Name, channel.Status, oldChannel.ChannelInfo.MultiKeyPollingIndex)
 	}

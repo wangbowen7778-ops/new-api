@@ -40,6 +40,16 @@ const (
 	FilterTaskPluginIdentity   ChannelFilterKind = "task_plugin_identity"
 	FilterResponsesWebSocket   ChannelFilterKind = "responses_websocket"
 	FilterRequestContainsVideo ChannelFilterKind = "request_contains_video"
+	// FilterNonVideoPreferred marks a request that carries no video content.
+	// It is a selection ordering preference rather than a predicate: video
+	// channels keep passing every filter check and stay selectable, but their
+	// priority tiers are ordered behind every non-video tier so they only
+	// serve once no non-video channel can. See model.buildPriorityTiers.
+	FilterNonVideoPreferred ChannelFilterKind = "non_video_preferred"
+	// FilterExcludeChannels drops the channels a retry already attempted, so a
+	// failing channel is replaced instead of being drawn again from the same
+	// tier.
+	FilterExcludeChannels ChannelFilterKind = "exclude_channels"
 )
 
 type ChannelFilter struct {
@@ -48,6 +58,8 @@ type ChannelFilter struct {
 	TaskPluginKey          string
 	TaskPluginKeys         []string
 	TaskPluginChannelTypes []int
+	// ChannelIDs carries the channels to drop for FilterExcludeChannels.
+	ChannelIDs []int
 }
 
 type ChannelConstraints struct {

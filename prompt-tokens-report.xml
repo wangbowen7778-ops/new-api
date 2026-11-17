@@ -1,0 +1,1061 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="20" skipped="0" tests="59" time="781.056" timestamp="2026-09-29T14:30:56.029539+08:00" hostname="boen"><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_token_tolerance_boundaries[99-False]" time="0.001" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_token_tolerance_boundaries[100-True]" time="0.001" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_token_tolerance_boundaries[103-True]" time="0.001" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_token_tolerance_boundaries[104-False]" time="0.001" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[assistant_hello]" time="15.721"><failure message="AssertionError: case assistant_hello: prompt_tokens outside accepted range: got 112, expected [99, 102] (diff +13)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=99, actual=112)">client = &lt;openai.OpenAI object at 0x000001E41CA19550&gt;, model = 'kimi-k3'
+case = {'id': 'assistant_hello', 'description': 'single assistant message, reasoning_effort high, streamed', 'request': {'mes...nt': '你好'}], 'max_tokens': 1024, 'reasoning_effort': 'high', 'temperature': 1, ...}, 'expected_prompt_tokens': 99, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case assistant_hello: prompt_tokens outside accepted range: got 112, expected [99, 102] (diff +13)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=99, actual=112)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_basic_chat]" time="25.465" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_basic_basic_messages]" time="12.109" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_basic_content_text_whole_encode]" time="11.531" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_basic_multi_turn]" time="6.933" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_response_format_response_format_text]" time="10.152" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_response_format_response_format_json_object]" time="15.430" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_response_format_response_format_json_schema]" time="10.417" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_response_format_response_format_tool_choice_required_json_object]" time="12.915" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_response_format_response_format_v1_json_schema]" time="14.080" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_choice_allowed_tools]" time="52.781" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_declare]" time="8.285" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_none]" time="18.254" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_message_reordered]" time="12.866" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_dynamic_tools]" time="23.352"><failure message="AssertionError: case k3_tool_dynamic_tools: prompt_tokens outside accepted range: got 151, expected [273, 276] (diff -122)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=273, actual=151)">client = &lt;openai.OpenAI object at 0x000001E41D4A63F0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_tool_dynamic_tools', 'description': '动态工具（system 消息内嵌 tools，中文长 prompt）', 'request': {'messages': [{'role':..., 'tools': [{'type': 'function', 'function': {...}}]}], 'reasoning_effort': 'max'}, 'expected_prompt_tokens': 273, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_tool_dynamic_tools: prompt_tokens outside accepted range: got 151, expected [273, 276] (diff -122)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=273, actual=151)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_dynamic_tools_not_in_top_level]" time="10.170"><failure message="AssertionError: case k3_tool_dynamic_tools_not_in_top_level: prompt_tokens outside accepted range: got 167, expected [258, 261] (diff -91)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=258, actual=167)">client = &lt;openai.OpenAI object at 0x000001E41D4A73E0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_tool_dynamic_tools_not_in_top_level', 'description': '动态工具 + 顶层 tools 并存', 'request': {'messages': [{'role'...rties': {...}, 'required': [...], 'type': 'object'}}}], 'reasoning_effort': 'max'}, 'expected_prompt_tokens': 258, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_tool_dynamic_tools_not_in_top_level: prompt_tokens outside accepted range: got 167, expected [258, 261] (diff -91)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=258, actual=167)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_think_thinking_effort]" time="7.298" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_think_thinking_effort_low]" time="3.529" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_think_thinking_effort_max]" time="9.594" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_think_tools_with_thinking_effort]" time="14.704" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_think_think_channel]" time="11.242"><failure message="AssertionError: case k3_think_think_channel: prompt_tokens outside accepted range: got 119, expected [100, 103] (diff +19)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=100, actual=119)">client = &lt;openai.OpenAI object at 0x000001E41D54F3E0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_think_think_channel', 'description': '单条 assistant（含 reasoning_content）', 'request': {'messages': [{'role':...reasoning_content': 'reasoning', 'content': 'answer'}], 'reasoning_effort': 'max'}, 'expected_prompt_tokens': 100, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_think_think_channel: prompt_tokens outside accepted range: got 119, expected [100, 103] (diff +19)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=100, actual=119)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_single_turn_think_off]" time="6.458"><failure message="AssertionError: case k3_single_turn_think_off: prompt_tokens outside accepted range: got 103, expected [36, 39] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=36, actual=103)">client = &lt;openai.OpenAI object at 0x000001E41D4A66C0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_single_turn_think_off', 'description': '单轮对话（system+user，think-off）', 'request': {'messages': [{'role': 'sy...: '你是一个简洁、准确的助手。'}, {'role': 'user', 'content': '你好'}], 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 36, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_single_turn_think_off: prompt_tokens outside accepted range: got 103, expected [36, 39] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=36, actual=103)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_single_turn_think_on]" time="11.084" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_multi_turn]" time="5.534" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_single]" time="7.995" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_result_followup]" time="37.201" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_parallel]" time="11.106" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_parallel_followup]" time="30.464" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_parallel_reordered]" time="9.288" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_multistep]" time="14.239" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_complex_schema]" time="12.935" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_no_params]" time="7.719" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_effort_low]" time="5.580" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_effort_high]" time="7.545" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_effort_max]" time="17.456" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_effort_tools]" time="14.862" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_dynamic_midway]" time="10.092"><failure message="AssertionError: case k3_tool_dynamic_midway: prompt_tokens outside accepted range: got 193, expected [295, 298] (diff -102)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=295, actual=193)">client = &lt;openai.OpenAI object at 0x000001E41D54E5D0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_tool_dynamic_midway', 'description': 'dynamic tools（system 消息注入工具）', 'request': {'messages': [{'role': 'use...': {...}}]}, {'role': 'user', 'content': '再查北京当前时间。'}], 'reasoning_effort': 'max'}, 'expected_prompt_tokens': 295, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_tool_dynamic_midway: prompt_tokens outside accepted range: got 193, expected [295, 298] (diff -102)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=295, actual=193)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_response_format_json_object_weather]" time="3.987" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_response_format_json_schema_weather]" time="12.778" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_bad_arguments]" time="9.408"><failure message="AssertionError: case k3_tool_bad_arguments: prompt_tokens outside accepted range: got 172, expected [268, 271] (diff -96)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=268, actual=172)">client = &lt;openai.OpenAI object at 0x000001E41D5A4500&gt;, model = 'kimi-k3'
+case = {'id': 'k3_tool_bad_arguments', 'description': 'tool call arguments 非法 JSON fallback', 'request': {'messages': [{'role...ity', 'parameters': {'type': 'object', 'properties': {...}, 'required': [...]}}}]}, 'expected_prompt_tokens': 268, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_tool_bad_arguments: prompt_tokens outside accepted range: got 172, expected [268, 271] (diff -96)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=268, actual=172)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_required]" time="6.160" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_choice_none]" time="11.545" /><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_multi_turn_think_off]" time="9.806"><failure message="AssertionError: case k3_multi_turn_think_off: prompt_tokens outside accepted range: got 150, expected [68, 71] (diff +82)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=68, actual=150)">client = &lt;openai.OpenAI object at 0x000001E41E5DC230&gt;, model = 'kimi-k3'
+case = {'id': 'k3_multi_turn_think_off', 'description': '多轮对话，think-off，历史 assistant 含 reasoning_content', 'request': {'messa...tent': '打个招呼吧'}, {'role': 'user', 'content': '我有新任务'}], 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 68, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_multi_turn_think_off: prompt_tokens outside accepted range: got 150, expected [68, 71] (diff +82)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=68, actual=150)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_tool_multistep_think_off]" time="16.821"><failure message="AssertionError: case k3_tool_multistep_think_off: prompt_tokens outside accepted range: got 429, expected [329, 332] (diff +100)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=329, actual=429)">client = &lt;openai.OpenAI object at 0x000001E41D5A5220&gt;, model = 'kimi-k3'
+case = {'id': 'k3_tool_multistep_think_off', 'description': 'multi-step 工具链（interleaved 结构），think-off', 'request': {'messages... 'object', 'properties': {...}, 'required': [...]}}}], 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 329, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_tool_multistep_think_off: prompt_tokens outside accepted range: got 429, expected [329, 332] (diff +100)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=329, actual=429)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_01_image_1536x1024]" time="11.153"><failure message="AssertionError: case k3_vision_01_image_1536x1024: prompt_tokens outside accepted range: got 2139, expected [2072, 2075] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=2072, actual=2139)">client = &lt;openai.OpenAI object at 0x000001E41E5DF5C0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_01_image_1536x1024', 'description': '1 landscape image (1536x1024), base64 PNG', 'request': {'messag...'image_url', 'image_url': {...}}]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 2072, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_01_image_1536x1024: prompt_tokens outside accepted range: got 2139, expected [2072, 2075] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=2072, actual=2139)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_02_images_1024x1536]" time="43.177"><failure message="AssertionError: case k3_vision_02_images_1024x1536: prompt_tokens outside accepted range: got 4184, expected [4117, 4120] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=4117, actual=4184)">client = &lt;openai.OpenAI object at 0x000001E41E69DE50&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_02_images_1024x1536', 'description': '2 portrait images (1024x1536), base64 PNG', 'request': {'messa...'image_url', 'image_url': {...}}]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 4117, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_02_images_1024x1536: prompt_tokens outside accepted range: got 4184, expected [4117, 4120] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=4117, actual=4184)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_03_images_1024x1024]" time="15.285"><failure message="AssertionError: case k3_vision_03_images_1024x1024: prompt_tokens outside accepted range: got 94, expected [4164, 4167] (diff -4070)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=4164, actual=94)">client = &lt;openai.OpenAI object at 0x000001E41E5DF110&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_03_images_1024x1024', 'description': '3 square images (1024x1024), base64 PNG', 'request': {'message...'image_url', 'image_url': {...}}]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 4164, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_03_images_1024x1024: prompt_tokens outside accepted range: got 94, expected [4164, 4167] (diff -4070)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=4164, actual=94)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_04_images_768x512]" time="16.278"><failure message="AssertionError: case k3_vision_04_images_768x512: prompt_tokens outside accepted range: got 2254, expected [2187, 2190] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=2187, actual=2254)">client = &lt;openai.OpenAI object at 0x000001E41E5DF7A0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_04_images_768x512', 'description': '4 landscape images (768x512), base64 PNG', 'request': {'messages...'image_url', 'image_url': {...}}]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 2187, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_04_images_768x512: prompt_tokens outside accepted range: got 2254, expected [2187, 2190] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=2187, actual=2254)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_05_images_512x768]" time="13.568"><failure message="AssertionError: case k3_vision_05_images_512x768: prompt_tokens outside accepted range: got 2794, expected [2727, 2730] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=2727, actual=2794)">client = &lt;openai.OpenAI object at 0x000001E41E5DDD60&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_05_images_512x768', 'description': '5 portrait images (512x768), base64 PNG', 'request': {'messages'...'image_url', 'image_url': {...}}]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 2727, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_05_images_512x768: prompt_tokens outside accepted range: got 2794, expected [2727, 2730] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=2727, actual=2794)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_06_images_512x512]" time="12.410"><failure message="AssertionError: case k3_vision_06_images_512x512: prompt_tokens outside accepted range: got 2308, expected [2241, 2244] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=2241, actual=2308)">client = &lt;openai.OpenAI object at 0x000001E41D54C6E0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_06_images_512x512', 'description': '6 square images (512x512), base64 PNG', 'request': {'messages': ...e_url', 'image_url': {...}}, ...]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 2241, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_06_images_512x512: prompt_tokens outside accepted range: got 2308, expected [2241, 2244] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=2241, actual=2308)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_07_images_384x256]" time="15.380"><failure message="AssertionError: case k3_vision_07_images_384x256: prompt_tokens outside accepted range: got 1130, expected [1063, 1066] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=1063, actual=1130)">client = &lt;openai.OpenAI object at 0x000001E41D54DD60&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_07_images_384x256', 'description': '7 landscape images (384x256), base64 PNG', 'request': {'messages...e_url', 'image_url': {...}}, ...]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 1063, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_07_images_384x256: prompt_tokens outside accepted range: got 1130, expected [1063, 1066] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=1063, actual=1130)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_08_images_256x384]" time="20.302"><failure message="AssertionError: case k3_vision_08_images_256x384: prompt_tokens outside accepted range: got 1279, expected [1211, 1214] (diff +68)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=1211, actual=1279)">client = &lt;openai.OpenAI object at 0x000001E41D54D6D0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_08_images_256x384', 'description': '8 portrait images (256x384), base64 PNG', 'request': {'messages'...e_url', 'image_url': {...}}, ...]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 1211, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_08_images_256x384: prompt_tokens outside accepted range: got 1279, expected [1211, 1214] (diff +68)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=1211, actual=1279)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_09_images_128x128]" time="10.316"><failure message="AssertionError: case k3_vision_09_images_128x128: prompt_tokens outside accepted range: got 391, expected [324, 327] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=324, actual=391)">client = &lt;openai.OpenAI object at 0x000001E41D4A72F0&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_09_images_128x128', 'description': '9 square images (128x128), base64 PNG', 'request': {'messages': ...ge_url', 'image_url': {...}}, ...]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 324, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_09_images_128x128: prompt_tokens outside accepted range: got 391, expected [324, 327] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=324, actual=391)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_10_images_64x64]" time="22.409"><failure message="AssertionError: case k3_vision_10_images_64x64: prompt_tokens outside accepted range: got 264, expected [197, 200] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=197, actual=264)">client = &lt;openai.OpenAI object at 0x000001E41E69DD60&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_10_images_64x64', 'description': '10 square images (64x64), base64 PNG', 'request': {'messages': [{'...ge_url', 'image_url': {...}}, ...]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 197, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_10_images_64x64: prompt_tokens outside accepted range: got 264, expected [197, 200] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=197, actual=264)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase><testcase classname="tests.prompt_tokens.test_prompt_tokens" name="test_prompt_tokens_match_groundtruth[k3_vision_image_then_text_1536x1024]" time="12.294"><failure message="AssertionError: case k3_vision_image_then_text_1536x1024: prompt_tokens outside accepted range: got 2139, expected [2072, 2075] (diff +67)&#10;assert False&#10; +  where False = _prompt_tokens_are_acceptable(expected=2072, actual=2139)">client = &lt;openai.OpenAI object at 0x000001E41E69D040&gt;, model = 'kimi-k3'
+case = {'id': 'k3_vision_image_then_text_1536x1024', 'description': '1 landscape image (1536x1024) followed by text, base64 P...age set in one short sentence.'}]}], 'max_tokens': 8, 'reasoning_effort': 'none'}, 'expected_prompt_tokens': 2072, ...}
+
+    @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+    def test_prompt_tokens_match_groundtruth(
+        client: openai.Client,
+        model: str,
+        case: dict[str, Any],
+    ) -&gt; None:
+        """A single prompt-token groundtruth case."""
+        request = _materialize_image_fixtures(case["request"])
+        request.pop("stream", None)
+    
+        extra_body = {
+            key: request.pop(key)
+            for key in list(request)
+            if key not in STANDARD_PARAMS
+        }
+    
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": True,
+            **request,
+        }
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+    
+        try:
+            stream = client.chat.completions.create(**kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.APIStatusError,
+            TimeoutError,
+        ) as exc:
+            pytest.fail(f"infrastructure/API error for case {case['id']}: {_error_message(exc) if hasattr(exc, 'response') else exc}")
+    
+        actual, message = _extract_stream_prompt_tokens(stream)
+        expected = case["expected_prompt_tokens"]
+    
+        assert actual is not None, (
+            f"case {case['id']}: could not read prompt_tokens: {message}"
+        )
+        allowed_max = expected + MAX_PROMPT_TOKEN_OVERCOUNT
+&gt;       assert _prompt_tokens_are_acceptable(expected=expected, actual=actual), (
+            f"case {case['id']}: prompt_tokens outside accepted range: "
+            f"got {actual}, expected [{expected}, {allowed_max}] "
+            f"(diff {actual - expected:+d})"
+        )
+E       AssertionError: case k3_vision_image_then_text_1536x1024: prompt_tokens outside accepted range: got 2139, expected [2072, 2075] (diff +67)
+E       assert False
+E        +  where False = _prompt_tokens_are_acceptable(expected=2072, actual=2139)
+
+tests\prompt_tokens\test_prompt_tokens.py:254: AssertionError</failure></testcase></testsuite></testsuites>

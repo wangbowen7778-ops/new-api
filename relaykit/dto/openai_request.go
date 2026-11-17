@@ -10,6 +10,8 @@ import (
 	kitutil "github.com/QuantumNous/new-api/relaykit/relayconvert/kitutil"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/samber/lo"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type ResponseFormat struct {
@@ -228,6 +230,119 @@ func (m *Message) isEmptyAfterToolsCleared() bool {
 	return m.Content == nil && m.Name == nil && m.Prefix == nil &&
 		m.ReasoningContent == nil && m.Reasoning == nil &&
 		len(m.ToolCalls) == 0 && m.ToolCallId == "" && len(m.Annotations) == 0
+}
+
+// HoistMessageToolsJSON rewrites a raw OpenAI chat request body the way
+// HoistMessageTools rewrites the parsed struct: message-level tool declarations
+// (Kimi K3 dynamic tool loading) move into the top-level tools field, deduped by
+// function name, and messages that held only tools are dropped. It exists for
+// pass-through, where the upstream body is the client's raw JSON and rebuilding
+// it from the parsed struct would drop every field the struct does not model.
+// Only the messages and tools keys are rewritten, so every unrelated field of
+// the body survives byte for byte. changed is false when the body declares no
+// message-level tools, in which case the original data is returned untouched.
+func HoistMessageToolsJSON(data []byte) (out []byte, changed bool, err error) {
+	messages := gjson.GetBytes(data, "messages")
+	if !messages.IsArray() {
+		return data, false, nil
+	}
+	hasMessageTools := false
+	messages.ForEach(func(_, message gjson.Result) bool {
+		// Match the parsed path's len(message.Tools) > 0: any present tools key,
+		// whatever its value, marks the message as tools-bearing.
+		if message.Get("tools").Exists() {
+			hasMessageTools = true
+			return false
+		}
+		return true
+	})
+	if !hasMessageTools {
+		return data, false, nil
+	}
+
+	seen := make(map[string]struct{})
+	var tools []json.RawMessage
+	if existing := gjson.GetBytes(data, "tools"); existing.IsArray() {
+		existing.ForEach(func(_, tool gjson.Result) bool {
+			seen[tool.Get("function.name").String()] = struct{}{}
+			tools = append(tools, json.RawMessage(tool.Raw))
+			return true
+		})
+	}
+
+	added := 0
+	kept := make([]json.RawMessage, 0, len(messages.Array()))
+	var editErr error
+	messages.ForEach(func(_, message gjson.Result) bool {
+		messageTools := message.Get("tools")
+		if !messageTools.Exists() {
+			kept = append(kept, json.RawMessage(message.Raw))
+			return true
+		}
+		// The parsed path abandons the whole array when any entry is not a tool
+		// object, so validate the same way before hoisting anything from it. The
+		// array check also keeps a bare null or non-array value from iterating.
+		var validation []ToolCallRequest
+		if messageTools.IsArray() && kitutil.Unmarshal([]byte(messageTools.Raw), &validation) == nil {
+			messageTools.ForEach(func(_, tool gjson.Result) bool {
+				name := tool.Get("function.name").String()
+				if _, ok := seen[name]; ok {
+					return true
+				}
+				seen[name] = struct{}{}
+				tools = append(tools, json.RawMessage(tool.Raw))
+				added++
+				return true
+			})
+		}
+		stripped, deleteErr := sjson.DeleteBytes([]byte(message.Raw), "tools")
+		if deleteErr != nil {
+			editErr = deleteErr
+			return false
+		}
+		// Reuse the struct predicate so the wire path drops exactly the messages
+		// the parsed path would drop. The decision only reads the stripped JSON;
+		// the emitted bytes are the untouched stripped body.
+		var parsed Message
+		if kitutil.Unmarshal(stripped, &parsed) == nil && parsed.isEmptyAfterToolsCleared() {
+			return true
+		}
+		kept = append(kept, stripped)
+		return true
+	})
+	if editErr != nil {
+		return nil, false, editErr
+	}
+
+	if len(kept) == 0 {
+		// Every message was a tools-only shell. The parsed path clears Messages
+		// and lets omitempty drop the key; match that so pass-through and
+		// conversion send the same body.
+		out, err = sjson.DeleteBytes(data, "messages")
+		if err != nil {
+			return nil, false, err
+		}
+	} else {
+		keptRaw, err := kitutil.Marshal(kept)
+		if err != nil {
+			return nil, false, err
+		}
+		out, err = sjson.SetRawBytes(data, "messages", keptRaw)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	if added > 0 {
+		toolsRaw, err := kitutil.Marshal(tools)
+		if err != nil {
+			return nil, false, err
+		}
+		out, err = sjson.SetRawBytes(out, "tools", toolsRaw)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	return out, true, nil
 }
 
 func (r *GeneralOpenAIRequest) GetTokenCountMeta() *types.TokenCountMeta {
@@ -681,7 +796,8 @@ const (
 	ContentTypeImageURL   = "image_url"
 	ContentTypeInputAudio = "input_audio"
 	ContentTypeFile       = "file"
-	ContentTypeVideoUrl   = "video_url" // 阿里百炼视频识别
+	ContentTypeVideoUrl   = "video_url"   // 阿里百炼视频识别
+	ContentTypeInputVideo = "input_video" // Responses API 视频输入
 	//ContentTypeAudioUrl   = "audio_url"
 )
 

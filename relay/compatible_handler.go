@@ -116,6 +116,30 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 			}
 		}
 		requestBody = common.NewReplayableBodyReader(storage)
+
+		// Hoist-then-pass-through: the hoist above rewrote only the parsed copy,
+		// which this branch discards. Rewrite the raw client body the same way so
+		// the upstream receives the merged top-level tools instead of the
+		// message-level declarations it cannot read; every other field of the
+		// body is preserved byte for byte.
+		if info.ChannelSetting.HoistMessageTools {
+			raw, err := storage.Bytes()
+			if err != nil {
+				return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+			}
+			hoisted, changed, err := dto.HoistMessageToolsJSON(raw)
+			if err != nil {
+				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
+			}
+			if changed {
+				body, closer, err := relaycommon.NewOutboundJSONBody(hoisted)
+				if err != nil {
+					return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
+				}
+				defer closer.Close()
+				requestBody = body
+			}
+		}
 	} else {
 		convertedRequest, err := adaptor.ConvertOpenAIRequest(c, info, request)
 		if err != nil {

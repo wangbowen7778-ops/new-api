@@ -153,6 +153,45 @@ var ConcurrencyRetryInterval = 100 * time.Millisecond
 // the CONCURRENCY_HIGH_PRIORITY_WAIT_WINDOW_MS env var.
 var ConcurrencyHighPriorityWaitWindow = 2 * time.Second
 
+// UpstreamQuotaCooldown keeps a channel out of selection after an upstream 429
+// that reports an exhausted quota: that refusal does not clear within a burst,
+// so re-probing it only multiplies traffic against a dead account.
+var UpstreamQuotaCooldown = 60 * time.Second
+
+// UpstreamRateLimitCooldown is the same for an upstream 429 that reports a
+// plain rate limit. Such a burst clears quickly, so the channel is only parked
+// long enough to stop concurrent requests from hammering it.
+var UpstreamRateLimitCooldown = 3 * time.Second
+
+// ChannelConcurrencyCooldown parks a channel after its own concurrency limit
+// rejected the attempt. The channel is healthy and a slot frees as soon as an
+// in-flight request finishes, so the park is deliberately short: it only keeps
+// a concurrent burst from selecting the same saturated channel over and over.
+var ChannelConcurrencyCooldown = 1 * time.Second
+
+// UpstreamServerErrorCooldown parks a channel after an upstream 5xx. A 502/503
+// usually means the upstream itself is failing, and each attempt against it
+// costs the client the full failure latency before the retry moves on. Parking
+// the channel keeps later requests on healthy channels instead of every one of
+// them paying that failure again.
+var UpstreamServerErrorCooldown = 15 * time.Second
+
+// UpstreamForbiddenCooldown parks a channel after an upstream 403. That is
+// almost always a WAF or credential rejection rather than a per-request
+// problem, so the channel stays out of selection while an operator looks at it.
+var UpstreamForbiddenCooldown = 30 * time.Second
+
+// The *MaxCooldown values cap the doubling applied when a channel keeps
+// refusing. A fixed short park would send one request at a long window every
+// few seconds; doubling pushes the probes out until the window reopens, while
+// the cap keeps a recovered channel from being parked for hours by a streak.
+var (
+	UpstreamRateLimitMaxCooldown   = 60 * time.Second
+	UpstreamQuotaMaxCooldown       = 300 * time.Second
+	UpstreamServerErrorMaxCooldown = 120 * time.Second
+	UpstreamForbiddenMaxCooldown   = 300 * time.Second
+)
+
 //var RootUserEmail = ""
 
 var IsMasterNode bool

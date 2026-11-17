@@ -1,6 +1,10 @@
 package service
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/QuantumNous/new-api/model"
+)
 
 // channelConcurrency tracks in-flight relay requests per channel. The limit is
 // enforced per node: on multi-node deployments each node enforces the cap
@@ -21,6 +25,25 @@ func channelConcurrencyStripe(id int) int {
 		id = -id
 	}
 	return id % channelConcurrencyStripes
+}
+
+// ChannelConcurrencyRoom reports whether the channel still has room under its
+// per-node in-flight cap. limit <= 0 means unlimited and always has room.
+func ChannelConcurrencyRoom(id int, limit int) bool {
+	if limit <= 0 {
+		return true
+	}
+	stripe := channelConcurrencyStripe(id)
+	channelConcurrency.mu[stripe].Lock()
+	defer channelConcurrency.mu[stripe].Unlock()
+	return channelConcurrency.count[id] < int64(limit)
+}
+
+// saturatedChannelsSkip marks channels whose in-flight budget is already spent
+// right now. Each channel carries its own cap, so a switch has to consult the
+// candidate's own limit rather than the limit of the channel that just failed.
+func saturatedChannelsSkip(channel *model.Channel) bool {
+	return !ChannelConcurrencyRoom(channel.Id, channel.GetSetting().MaxConcurrentRequests)
 }
 
 // AcquireChannelConcurrency registers an in-flight request for the channel when

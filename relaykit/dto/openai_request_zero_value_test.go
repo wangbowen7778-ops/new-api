@@ -440,6 +440,106 @@ func TestGeneralOpenAIRequestHoistMessageTools(t *testing.T) {
 	})
 }
 
+func TestHoistMessageToolsJSONMatchesStructHoistAndKeepsUnknownFields(t *testing.T) {
+	toolWeather := `{"type":"function","function":{"name":"get_weather","description":"Get the weather","parameters":{"type":"object"}}}`
+	toolTime := `{"type":"function","function":{"name":"get_current_time","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}}`
+	toolLookup := `{"type":"function","function":{"name":"lookup_order","parameters":{"type":"object"}}}`
+
+	raw := []byte(`{
+		"model":"kimi-k3",
+		"stream":false,
+		"tool_choice":"required",
+		"temperature":0.2,
+		"prompt_cache_options":{"mode":"implicit","ttl":"1h"},
+		"tools":[` + toolWeather + `],
+		"messages":[
+			{"role":"system","content":"You are Kimi."},
+			{"role":"system","tools":[` + toolTime + `]},
+			{"role":"system","content":"","tools":[` + toolLookup + `]}
+		]
+	}`)
+
+	out, changed, err := HoistMessageToolsJSON(raw)
+	require.NoError(t, err)
+	require.True(t, changed)
+
+	// Non-message, non-tools fields survive byte for byte.
+	require.True(t, gjson.GetBytes(out, "stream").Exists())
+	assert.False(t, gjson.GetBytes(out, "stream").Bool())
+	assert.Equal(t, 0.2, gjson.GetBytes(out, "temperature").Float())
+	assert.Equal(t, "implicit", gjson.GetBytes(out, "prompt_cache_options.mode").String())
+
+	// The wire rewrite must land on exactly the messages and tools the parsed
+	// path produces, so pass-through and conversion cannot diverge.
+	var req GeneralOpenAIRequest
+	require.NoError(t, kitutil.Unmarshal(raw, &req))
+	req.HoistMessageTools()
+	structOut, err := kitutil.Marshal(req)
+	require.NoError(t, err)
+	assert.JSONEq(t, gjson.GetBytes(structOut, "messages").Raw, gjson.GetBytes(out, "messages").Raw)
+	assert.JSONEq(t, gjson.GetBytes(structOut, "tools").Raw, gjson.GetBytes(out, "tools").Raw)
+}
+
+func TestHoistMessageToolsJSONNoopWithoutMessageTools(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "no messages", raw: `{"model":"kimi-k3","tools":[{"type":"function","function":{"name":"a"}}]}`},
+		{name: "no message-level tools", raw: `{"model":"kimi-k3","tools":[],"messages":[{"role":"user","content":"hi"}]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, changed, err := HoistMessageToolsJSON([]byte(tc.raw))
+			require.NoError(t, err)
+			assert.False(t, changed)
+			assert.Equal(t, []byte(tc.raw), out, "unchanged body must be returned untouched")
+		})
+	}
+}
+
+func TestHoistMessageToolsJSONMatchesStructHoistForInvalidTools(t *testing.T) {
+	// A non-array tools value must be treated exactly like the parsed path:
+	// it contributes no tools and leaves a bare shell that is dropped.
+	raw := []byte(`{
+		"model":"kimi-k3",
+		"messages":[
+			{"role":"system","tools":"not-an-array"},
+			{"role":"system","content":"after"}
+		]
+	}`)
+
+	out, changed, err := HoistMessageToolsJSON(raw)
+	require.NoError(t, err)
+	require.True(t, changed)
+
+	var req GeneralOpenAIRequest
+	require.NoError(t, kitutil.Unmarshal(raw, &req))
+	req.HoistMessageTools()
+	structOut, err := kitutil.Marshal(req)
+	require.NoError(t, err)
+
+	assert.JSONEq(t, gjson.GetBytes(structOut, "messages").Raw, gjson.GetBytes(out, "messages").Raw)
+	assert.False(t, gjson.GetBytes(out, "tools").Exists())
+}
+
+func TestHoistMessageToolsJSONDropsMessagesKeyWhenOnlyShellsRemain(t *testing.T) {
+	raw := []byte(`{"model":"kimi-k3","messages":[{"role":"system","tools":[{"type":"function","function":{"name":"a"}}]}]}`)
+
+	out, changed, err := HoistMessageToolsJSON(raw)
+	require.NoError(t, err)
+	require.True(t, changed)
+
+	var req GeneralOpenAIRequest
+	require.NoError(t, kitutil.Unmarshal(raw, &req))
+	req.HoistMessageTools()
+	structOut, err := kitutil.Marshal(req)
+	require.NoError(t, err)
+
+	assert.False(t, gjson.GetBytes(structOut, "messages").Exists())
+	assert.False(t, gjson.GetBytes(out, "messages").Exists())
+	assert.Equal(t, "a", gjson.GetBytes(out, "tools.0.function.name").String())
+}
+
 func TestSGLangRequestExtensionsRoundTrip(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

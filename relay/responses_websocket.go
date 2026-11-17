@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -264,7 +265,16 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 	}
 	common.SetContextKey(c, appconstant.ContextKeyOriginalModel, modelName)
 	common.SetContextKey(c, appconstant.ContextKeyRequestStartTime, time.Now())
-	service.GetChannelConstraints(c).AddFilter(appdto.ChannelFilter{Kind: appdto.FilterRequestPath, RequestPath: c.Request.URL.Path})
+	// Classify the create the same way the HTTP distributor does, so the retry
+	// loop below prefers non-video channels for text/image requests and keeps
+	// video requests on video-parsing channels.
+	constraints := service.GetChannelConstraints(c)
+	constraints.AddFilter(appdto.ChannelFilter{Kind: appdto.FilterRequestPath, RequestPath: c.Request.URL.Path})
+	if middleware.RequestContainsVideo(create.Body) {
+		constraints.AddFilter(appdto.ChannelFilter{Kind: appdto.FilterRequestContainsVideo})
+	} else {
+		constraints.AddFilter(appdto.ChannelFilter{Kind: appdto.FilterNonVideoPreferred})
+	}
 
 	if s.lockedChannelID != 0 {
 		if apiErr = s.restoreConnectionContext(c, modelName); apiErr != nil {
@@ -299,6 +309,16 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 		for ; retry.GetRetry() <= common.RetryTimes || switchBudget > 0; retry.IncreaseRetry() {
 			if retry.GetRetry() > common.RetryTimes && switchBudget > 0 {
 				switchBudget--
+			}
+			// Same rule as the HTTP relay: a retry must not draw the channel
+			// that just failed again.
+			if retry.GetRetry() > 0 {
+				retry.ExcludeChannelIDs = retry.ExcludeChannelIDs[:0]
+				for _, usedChannel := range c.GetStringSlice("use_channel") {
+					if channelID, parseErr := strconv.Atoi(usedChannel); parseErr == nil {
+						retry.ExcludeChannelIDs = append(retry.ExcludeChannelIDs, channelID)
+					}
+				}
 			}
 			var channel *appmodel.Channel
 			channel, apiErr = selectResponsesWSChannel(c, modelName, retry)
@@ -335,7 +355,36 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				service.ResetStatusCode(apiErr, c.GetString("status_code_mapping"))
 				info.LastError = apiErr
 				decision := service.DecideRelayRetry(c, apiErr, common.RetryTimes-retry.GetRetry())
-				if decision.Action == "retry" && retry.GetRetry() >= common.RetryTimes {
+				// Same rule as the HTTP relay: park the channel after an upstream
+				// refusal or failure so later requests skip it instead of paying
+				// the same latency again.
+				upstream429 := apiErr.StatusCode == http.StatusTooManyRequests && apiErr.GetErrorCode() != types.ErrorCodeConcurrencyLimit
+				if apiErr.GetErrorCode() != types.ErrorCodeConcurrencyLimit {
+					switch {
+					case upstream429:
+						base := service.Upstream429Cooldown(apiErr)
+						limit := common.UpstreamRateLimitMaxCooldown
+						if base >= common.UpstreamQuotaCooldown {
+							limit = common.UpstreamQuotaMaxCooldown
+						}
+						appmodel.MarkChannelCooldownBackoff(channel.Id, base, limit)
+					case apiErr.StatusCode >= 500 && apiErr.StatusCode <= 599:
+						appmodel.MarkChannelCooldownBackoff(channel.Id, common.UpstreamServerErrorCooldown, common.UpstreamServerErrorMaxCooldown)
+					case apiErr.StatusCode == http.StatusPaymentRequired:
+						appmodel.MarkChannelCooldownBackoff(channel.Id, common.UpstreamQuotaCooldown, common.UpstreamQuotaMaxCooldown)
+					case apiErr.StatusCode == http.StatusForbidden:
+						appmodel.MarkChannelCooldownBackoff(channel.Id, common.UpstreamForbiddenCooldown, common.UpstreamForbiddenMaxCooldown)
+					case apiErr.StatusCode <= 0:
+						appmodel.MarkChannelCooldownBackoff(channel.Id, common.UpstreamServerErrorCooldown, common.UpstreamServerErrorMaxCooldown)
+					}
+				}
+				// Every switch-worthy failure must reach a different channel,
+				// not the tier holding the one that just failed. See
+				// RetryParam.SwitchAcrossTiers.
+				if decision.Action == "retry" && apiErr.GetErrorCode() != types.ErrorCodeConcurrencyLimit {
+					retry.SwitchAcrossTiers = true
+				}
+				if decision.Action == "retry" && (retry.GetRetry() >= common.RetryTimes || upstream429) {
 					if switchBudget < 0 {
 						tierCount = max(appmodel.MaxConcurrencyRetryProbes(
 							common.GetContextKeyString(c, appconstant.ContextKeyUsingGroup),
@@ -343,11 +392,23 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 							service.GetChannelConstraints(c).Filters,
 						), 1)
 						switchBudget = int64(tierCount)
+						if retry.SwitchAcrossTiers {
+							switchBudget = int64(max(appmodel.RetryChannelCount(
+								common.GetContextKeyString(c, appconstant.ContextKeyUsingGroup),
+								modelName,
+								service.GetChannelConstraints(c).Filters,
+							), tierCount))
+						}
 					}
-					tier := switchProbe % tierCount
-					switchProbe++
-					retry.TierOverride = &tier
-					retry.PriorityFloor = 0
+					if retry.SwitchAcrossTiers {
+						retry.TierOverride = nil
+						retry.PriorityFloor = 0
+					} else {
+						tier := switchProbe % tierCount
+						switchProbe++
+						retry.TierOverride = &tier
+						retry.PriorityFloor = 0
+					}
 				} else {
 					retry.TierOverride = nil
 					retry.PriorityFloor = retry.GetRetry()

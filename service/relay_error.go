@@ -1,6 +1,7 @@
 package service
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -51,6 +52,16 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	}
 	if code < 100 || code > 599 {
 		return PolicyDecision{Action: "retry", Reason: "unrecognized_status", Source: "system"}
+	}
+	if code == http.StatusTooManyRequests {
+		// A configured policy decides whether this flavor of 429 switches
+		// channels or fails fast; unmatched bodies keep the built-in retry.
+		if policy, ok := operation_setting.MatchChannel429Policy(err.Error()); ok {
+			if policy.Action == operation_setting.Channel429ActionCooldownOnly {
+				return PolicyDecision{Action: "stop", Reason: "429_policy_no_retry", Source: "global"}
+			}
+		}
+		return PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}
 	}
 	if operation_setting.ShouldRetryByStatusCode(code) {
 		return PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}

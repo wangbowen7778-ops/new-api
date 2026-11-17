@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { Dialog } from '@/components/dialog'
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Collapsible,
   CollapsibleContent,
@@ -417,10 +418,35 @@ export function RuleEditorDialog(props: Props) {
                     setKeySources(next)
                   }}
                 />
+                <div className='flex shrink-0 items-center gap-1.5'>
+                  <Checkbox
+                    id={`key-source-hash-${src.rowId}`}
+                    aria-label={t('Hash')}
+                    checked={!!src.hash}
+                    onCheckedChange={(checked) => {
+                      const next = [...keySources]
+                      next[idx] =
+                        checked === true
+                          ? { ...src, hash: true }
+                          : { ...src, hash: undefined }
+                      setKeySources(next)
+                    }}
+                  />
+                  <Label
+                    htmlFor={`key-source-hash-${src.rowId}`}
+                    className='text-muted-foreground cursor-pointer text-xs font-normal'
+                    title={t(
+                      'Store a digest instead of the raw value in the cache key'
+                    )}
+                  >
+                    {t('Hash')}
+                  </Label>
+                </div>
                 <Button
                   type='button'
                   variant='ghost'
                   size='icon'
+                  aria-label={t('Delete')}
                   onClick={() =>
                     setKeySources((prev) => prev.filter((_, i) => i !== idx))
                   }

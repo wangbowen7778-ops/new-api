@@ -51,8 +51,18 @@ func Distribute() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
 		}
+		logger.LogDebug(c, "video detect: modelRequest=%v containsVideo=%v",
+			modelRequest != nil, modelRequest != nil && modelRequest.ContainsVideo)
 		if modelRequest != nil && modelRequest.ContainsVideo {
+			// A video request is served exclusively by channels marked for video
+			// parsing.
 			constraints.AddFilter(taskdto.ChannelFilter{Kind: taskdto.FilterRequestContainsVideo})
+		} else {
+			// Everything else is a text/image request. The preference is an
+			// ordering hint, not a predicate: non-video channels are tried first
+			// and video channels are reached only once none of them can serve the
+			// attempt. See model.buildPriorityTiers.
+			constraints.AddFilter(taskdto.ChannelFilter{Kind: taskdto.FilterNonVideoPreferred})
 		}
 		_, pinned, _ := constraints.ResolvedPin()
 		if !pinned {
@@ -271,6 +281,8 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 		return nil, errors.New("model must be provided once")
 	}
 
+	videoDetected := RequestContainsVideo(requestBody)
+	logger.LogDebug(c, "json body video detect: bodyLen=%d containsVideo=%v", len(requestBody), videoDetected)
 	values := gjson.GetManyBytes(requestBody, "model", "group")
 	model, err := getJSONStringValue(values[0], "model")
 	if err != nil {
@@ -289,34 +301,61 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	return &ModelRequest{
 		Model:         model,
 		Group:         group,
-		ContainsVideo: bodyContainsVideoPart(requestBody),
+		ContainsVideo: RequestContainsVideo(requestBody),
 	}, nil
 }
 
-// bodyContainsVideoPart reports whether any OpenAI chat message carries a
-// base64-encoded video content part (data:video/... URL). Channels only
-// support base64 video uploads, so http/https video_url links do not count.
-// Scans only part "type" and URL prefix; payloads are never copied.
-func bodyContainsVideoPart(requestBody []byte) bool {
-	messages := gjson.GetBytes(requestBody, "messages")
-	if !messages.IsArray() {
+// RequestContainsVideo reports whether an OpenAI-shaped request body carries a
+// video content part. Any video_url / input_video part counts, regardless of
+// whether the payload is a base64 data URL or an http(s) link: channels that
+// cannot accept video must not receive such requests either way. Both the Chat
+// Completions shape (messages[].content[] with type video_url) and the
+// Responses shape (input[].content[] with type input_video) are recognized;
+// the Responses WebSocket relay reuses this so both transports classify a
+// request the same way. Only part "type" and the URL prefix are read; payloads
+// are never copied.
+func RequestContainsVideo(requestBody []byte) bool {
+	if bodyContentHasVideoPart(gjson.GetBytes(requestBody, "messages")) {
+		return true
+	}
+	return bodyContentHasVideoPart(gjson.GetBytes(requestBody, "input"))
+}
+
+func bodyContentHasVideoPart(items gjson.Result) bool {
+	if !items.IsArray() {
 		return false
 	}
-	for _, message := range messages.Array() {
-		content := message.Get("content")
+	for _, item := range items.Array() {
+		content := item.Get("content")
 		if !content.IsArray() {
 			continue
 		}
 		for _, part := range content.Array() {
-			if part.Get("type").String() != dto.ContentTypeVideoUrl {
-				continue
-			}
-			if strings.HasPrefix(part.Get("video_url.url").String(), "data:video") {
-				return true
+			switch part.Get("type").String() {
+			case dto.ContentTypeVideoUrl:
+				if part.Get("video_url.url").String() != "" {
+					return true
+				}
+			case dto.ContentTypeInputVideo:
+				if videoPartURL(part) != "" {
+					return true
+				}
 			}
 		}
 	}
 	return false
+}
+
+// videoPartURL resolves the URL of a Responses input_video part, which may nest
+// it under video_url (object or bare string) or carry it at the top level.
+func videoPartURL(part gjson.Result) string {
+	if url := part.Get("video_url.url").String(); url != "" {
+		return url
+	}
+	if videoURL := part.Get("video_url"); videoURL.Type == gjson.String {
+		return videoURL.String()
+	}
+	return part.Get("url").String()
 }
 
 func countTopLevelJSONKey(data []byte, target string) int {
@@ -478,6 +517,9 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			return nil, false, err
 		}
 		modelRequest.Model = req.Model
+		// ContainsVideo drives the video-channel hard filter downstream; losing
+		// it here would route video requests to channels without video support.
+		modelRequest.ContainsVideo = req.ContainsVideo
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/realtime") {
 		//wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01

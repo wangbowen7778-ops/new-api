@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/tidwall/gjson"
 	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -90,6 +91,9 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		newApiErr.RetryAfterSeconds = extractRetryAfterSeconds(resp, responseBody)
 	}
 	CloseResponseBodyGracefully(resp)
 	var errResponse dto.GeneralErrorResponse
@@ -227,4 +231,22 @@ func TaskErrorFromAPIError(apiErr *types.NewAPIError) *taskdto.TaskError {
 		StatusCode: apiErr.StatusCode,
 		Error:      apiErr.Err,
 	}
+}
+
+
+// extractRetryAfterSeconds reads an upstream 429's wait hint: the Retry-After
+// header first, then a body field (data.retry_after covers queued-upstream
+// bodies like Kimi's). The smaller positive value wins; anything unreadable
+// yields zero and the caller falls back to its own ceiling.
+func extractRetryAfterSeconds(resp *http.Response, body []byte) int {
+	best := 0
+	if v := resp.Header.Get("Retry-After"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			best = n
+		}
+	}
+	if n := int(gjson.GetBytes(body, "data.retry_after").Int()); n > 0 && (best == 0 || n < best) {
+		best = n
+	}
+	return best
 }

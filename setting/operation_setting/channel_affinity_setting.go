@@ -6,6 +6,12 @@ type ChannelAffinityKeySource struct {
 	Type string `json:"type"` // context_int, context_string, request_header, gjson
 	Key  string `json:"key,omitempty"`
 	Path string `json:"path,omitempty"`
+	// Hash replaces the extracted value with a short digest before it becomes
+	// part of the affinity cache key. Content-derived sources (prompt prefixes,
+	// system messages) must set it: the raw text is kilobytes long, would be
+	// stored verbatim in every cache key, and holds request content that the
+	// cache does not need to keep.
+	Hash bool `json:"hash,omitempty"`
 }
 
 type ChannelAffinityRule struct {

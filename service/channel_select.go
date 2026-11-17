@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -57,6 +58,16 @@ type RetryParam struct {
 	// channel selection so tiers above it are re-probed before dropping
 	// lower. See selectionTier.
 	PriorityFloor int
+	// ExcludeChannelIDs lists channels this request already attempted. A retry
+	// fills it so a failing channel is replaced rather than drawn again from
+	// the same tier.
+	ExcludeChannelIDs []int
+	// SwitchAcrossTiers makes the retry draw from every channel serving the
+	// model instead of one priority tier, and treats ExcludeChannelIDs as
+	// strict. The upstream-429 loop sets it: a refusal on the only channel of
+	// the top tier would otherwise pin the request there, because an exhausted
+	// tier falls back to the very channel that refused.
+	SwitchAcrossTiers bool
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -140,6 +151,12 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 	filters := GetChannelConstraints(param.Ctx).Filters
+	if len(param.ExcludeChannelIDs) > 0 {
+		filters = append(slices.Clone(filters), dto.ChannelFilter{
+			Kind:       dto.FilterExcludeChannels,
+			ChannelIDs: param.ExcludeChannelIDs,
+		})
+	}
 
 	if param.TokenGroup == "auto" {
 		autoGroups := GetRequestAutoGroups(param.Ctx, userGroup)
@@ -170,12 +187,19 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(
-				autoGroup,
-				param.ModelName,
-				param.selectionTier(priorityRetry),
-				filters,
-			)
+			if param.SwitchAcrossTiers {
+				channel, err = model.PickChannelForSwitch(autoGroup, param.ModelName, filters, saturatedChannelsSkip)
+				if err != nil {
+					return nil, selectGroup, err
+				}
+			} else {
+				channel, _ = model.GetRandomSatisfiedChannel(
+					autoGroup,
+					param.ModelName,
+					param.selectionTier(priorityRetry),
+					filters,
+				)
+			}
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -213,17 +237,62 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(
-			param.TokenGroup,
-			param.ModelName,
-			param.selectionTier(param.GetRetry()),
-			filters,
-		)
+		if param.SwitchAcrossTiers {
+			channel, err = pickChannelForSwitch(param, filters)
+		} else {
+			channel, err = model.GetRandomSatisfiedChannel(
+				param.TokenGroup,
+				param.ModelName,
+				param.selectionTier(param.GetRetry()),
+				filters,
+			)
+		}
 		if err != nil {
 			return nil, param.TokenGroup, err
 		}
 	}
 	return channel, selectGroup, nil
+}
+
+// pickChannelForSwitch resolves the group that actually carries the request.
+//
+// The affinity lookup and the retry budget both use the effective using-group,
+// while TokenGroup is the token's configured group. A group mapping (or an
+// auto-group pick) makes the two differ, and querying the wrong one reports
+// "no available channel" even though the group the first attempt used still
+// has candidates — which is exactly the case where a refusal must switch.
+func pickChannelForSwitch(param *RetryParam, filters []dto.ChannelFilter) (*model.Channel, error) {
+	groups := []string{
+		common.GetContextKeyString(param.Ctx, constant.ContextKeyUsingGroup),
+		param.TokenGroup,
+	}
+	seen := make(map[string]struct{}, len(groups))
+	for _, group := range groups {
+		if group == "" {
+			continue
+		}
+		if _, duplicate := seen[group]; duplicate {
+			continue
+		}
+		seen[group] = struct{}{}
+		channel, err := model.PickChannelForSwitch(group, param.ModelName, filters, saturatedChannelsSkip)
+		if err != nil || channel != nil {
+			return channel, err
+		}
+		// Nothing left in this group. Log both counts so the next refusal shows
+		// whether the group itself is wrong (total 0) or every candidate was
+		// already attempted (total > 0, remaining 0).
+		if param.Ctx != nil {
+			logger.LogWarn(param.Ctx, common.LogText(
+				"retry switch found no channel: group=%q model=%q total_candidates=%d remaining=%d tried=%v",
+				group, param.ModelName,
+				model.RetryChannelCount(group, param.ModelName, nil),
+				model.RetryChannelCount(group, param.ModelName, filters),
+				param.ExcludeChannelIDs,
+			))
+		}
+	}
+	return nil, nil
 }
 
 func pinnedTaskPluginIdentities(c *gin.Context, expected string) ([]int, []string) {
@@ -337,10 +406,18 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 			affinityUsable := false
 			preferred, err := model.CacheGetChannel(preferredChannelID)
 			affinitySatisfied := false
-			if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
+			// A channel parked after an upstream 429 must not win through the
+			// session binding either, otherwise every later request of that
+			// session walks straight back into the refusal.
+			if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled && !model.ChannelCooling(preferred.Id) {
 				affinitySatisfied, _ = model.ChannelSatisfiesFilters(preferred, modelName, constraints.Filters)
 			}
-			if affinitySatisfied {
+			// A binding is a preference, not a lock. When the bound channel has
+			// spent its in-flight budget this request goes elsewhere instead of
+			// queueing behind it — but the binding itself is kept, so the warm
+			// cache is still used once the channel frees up.
+			saturated := affinitySatisfied && saturatedChannelsSkip(preferred)
+			if affinitySatisfied && !saturated {
 				if usingGroup == "auto" {
 					userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 					for _, g := range GetRequestAutoGroups(c, userGroup) {
@@ -349,6 +426,7 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 							common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
 							channel = preferred
 							affinityUsable = true
+							c.Set(ginKeyChannelAffinitySelected, true)
 							MarkChannelAffinityUsed(c, g, preferred.Id)
 							break
 						}
@@ -357,10 +435,15 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 					channel = preferred
 					selectGroup = usingGroup
 					affinityUsable = true
+					c.Set(ginKeyChannelAffinitySelected, true)
 					MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
 				}
 			}
-			if !affinityUsable && !ShouldKeepChannelAffinityOnChannelDisabled() {
+			// A parked channel is only skipped for a while, so the binding has
+			// to survive the cooldown: dropping it would throw away the warm
+			// cache that the channel still holds. A saturated channel is the
+			// same case: the binding stays and the next request can use it.
+			if !affinityUsable && !saturated && !ShouldKeepChannelAffinityOnChannelDisabled() && !model.ChannelCooling(preferredChannelID) {
 				ClearCurrentChannelAffinityCache(c)
 			}
 			if !affinityUsable && RequestPolicy(c).SessionMode == "strict" {
@@ -396,6 +479,12 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 			FilterKind: kind, Channel: channel, NoAvailableChannel: true,
 		}
 	}
+	// A pool that looks large in the channel list can still hold one candidate
+	// after filters, and nothing outside reveals that. DEBUG shows the pool size
+	// next to the pick.
+	logger.LogDebug(c, "channel select: group=%s model=%s retry=%d candidates=%d picked=%d",
+		selectGroup, modelName, retry.GetRetry(),
+		model.RetryChannelCount(selectGroup, modelName, constraints.Filters), channel.Id)
 	return channel, selectGroup, nil
 }
 

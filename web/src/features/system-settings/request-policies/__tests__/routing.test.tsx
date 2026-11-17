@@ -453,6 +453,28 @@ it('editing a rule without a session mode saves the chosen override with the ret
   })
 })
 
+it('stores the hash flag chosen for a key source', async () => {
+  show()
+  await screen.findByRole('table')
+  await userEvent.click(screen.getByRole('button', { name: 'Edit Rule' }))
+  const dialog = screen.getByRole('dialog')
+  const hashToggle = within(dialog).getByRole('checkbox', { name: 'Hash' })
+  expect(hashToggle).not.toBeChecked()
+  await userEvent.click(hashToggle)
+  await waitFor(() => expect(hashToggle).toBeChecked())
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+  await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1))
+  const savedRule = JSON.parse(
+    currentOptions['channel_affinity_setting.rules']
+  )[0]
+  expect(savedRule.key_sources[0]).toMatchObject({
+    type: 'request_header',
+    key: 'X-Session',
+    hash: true,
+  })
+})
+
 it('switches a rule between inheritance and override while preserving other rules', async () => {
   const rules = JSON.parse(options['channel_affinity_setting.rules'])
   const second = {

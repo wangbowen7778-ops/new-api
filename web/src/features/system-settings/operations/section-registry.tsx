@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
+import { Channel429PoliciesSection } from '../general/channel-429-policies-section'
 import { EmailSettingsSection } from '../integrations/email-settings-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
@@ -27,6 +28,15 @@ import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
 const OPERATIONS_SECTIONS = [
+  {
+    id: 'channel-429-policies',
+    titleKey: 'Channel 429 Policies',
+    build: (settings: OperationsSettings) => (
+      <Channel429PoliciesSection
+        defaultValues={{ Channel429Policies: settings.Channel429Policies }}
+      />
+    ),
+  },
   {
     id: 'behavior',
     titleKey: 'System Behavior',
