@@ -2976,7 +2976,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For a stronger password": "For a stronger password",
     "For advanced custom channels this applies only to /v1/responses routes without protocol conversion.": "For advanced custom channels this applies only to /v1/responses routes without protocol conversion.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
@@ -7781,6 +7781,10 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Channel 429 Policies": "Channel 429 Policies",
+    "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.",
+    "Channel 429 policies must be a JSON array": "Channel 429 policies must be a JSON array",
+    "Channel 429 policies must be valid JSON": "Channel 429 policies must be valid JSON"
   }
 }
