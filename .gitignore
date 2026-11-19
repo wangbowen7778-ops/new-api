@@ -49,3 +49,6 @@ go.work.sum
 *.tar
 mock/
 new-api-local/
+
+# agent workspace memory (contains local infra notes)
+.workbuddy/
