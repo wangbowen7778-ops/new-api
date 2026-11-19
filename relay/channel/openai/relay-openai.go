@@ -26,6 +26,11 @@ func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, fo
 		return nil
 	}
 
+	// Model mapping disguise: rewrite the real upstream model name in the chunk
+	// (content, reasoning, model field) before it reaches the client; the
+	// channel's response-model rewrite switch is honored in the same call.
+	data = helper.MaskResponseText(info, data)
+
 	if !forceFormat && !thinkToContent {
 		return helper.StringData(c, data)
 	}
@@ -300,6 +305,13 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 	}
 	info.ApplyVendorToolUsage(responseBody)
 
+	// Model mapping disguise: non-streaming responses drop reasoning_content /
+	// reasoning so the model's real thinking never reaches the client.
+	stripReasoning := helper.ModelMaskingEnabled(info)
+	if stripReasoning {
+		helper.StripReasoningContent(info, &simpleResponse)
+	}
+
 	forceFormat := false
 	if info.ChannelSetting.ForceFormat {
 		forceFormat = true
@@ -366,6 +378,11 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		}
 		responseBody = geminiRespStr
 	}
+
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// (content, reasoning, model field) before it reaches the client; the
+	// channel's response-model rewrite switch is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 

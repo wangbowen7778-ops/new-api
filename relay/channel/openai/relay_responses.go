@@ -39,6 +39,10 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	responseBody = rewriteSGLangResponsesCreatedAt(info, responseBody, "created_at", responsesResponse.CreatedAt)
 
 	// 写入新的 response body
+	// Model mapping disguise: rewrite the real upstream model name in the body
+	// (output text, reasoning, model field) before it reaches the client; the
+	// channel's response-model rewrite switch is honored in the same call.
+	responseBody = []byte(helper.MaskResponseText(info, string(responseBody)))
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	// compute usage
@@ -89,7 +93,10 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			data = string(rewriteSGLangResponsesCreatedAt(info, []byte(data), "response.created_at", streamResponse.Response.CreatedAt))
 		}
 		accumulator.Observe(&streamResponse, common.StringToByteSlice(data))
-		if err := helper.ResponseChunkData(c, streamResponse, data); err != nil {
+		// Model mapping disguise: rewrite the real upstream model name in the
+		// chunk before it is framed and written; the channel's response-model
+		// rewrite switch is honored in the same call.
+		if err := helper.ResponseChunkData(c, streamResponse, helper.MaskResponseText(info, data)); err != nil {
 			sr.Stop(err)
 			return
 		}
