@@ -121,6 +121,8 @@ type TaskPrivateData struct {
 	TokenId        int                 `json:"token_id,omitempty"`        // 令牌 ID，用于令牌额度退款
 	NodeName       string              `json:"node_name,omitempty"`       // 发起任务的节点名，轮询结算阶段据此归属日志而非最后查询节点
 	BillingContext *TaskBillingContext `json:"billing_context,omitempty"` // 计费参数快照（用于轮询阶段重新计算）
+	// RequestSnapshot 保存提交时的提示词、参数和参考素材元数据，供任务详情展示。
+	RequestSnapshot *TaskRequestSnapshot `json:"request_snapshot,omitempty"`
 	// ResponsesBackground records that the openai_responses create request
 	// asked for background:true. Every task is durable and survives client
 	// disconnect regardless; this only echoes the protocol-level request
@@ -162,13 +164,36 @@ type TaskPluginAuthorSnapshot struct {
 
 // TaskBillingContext 记录任务提交时的计费参数，以便轮询阶段可以重新计算额度。
 type TaskBillingContext struct {
-	ModelPrice      float64                      `json:"model_price,omitempty"`       // 模型单价
-	GroupRatio      float64                      `json:"group_ratio,omitempty"`       // 分组倍率
-	ModelRatio      float64                      `json:"model_ratio,omitempty"`       // 模型倍率
-	OtherRatios     map[string]float64           `json:"other_ratios,omitempty"`      // 附加倍率（时长、分辨率等）
-	OriginModelName string                       `json:"origin_model_name,omitempty"` // 模型名称，必须为OriginModelName
-	PerCallBilling  bool                         `json:"per_call_billing,omitempty"`  // 按次计费：跳过轮询阶段的差额结算
-	TieredSnapshot  *billingexpr.BillingSnapshot `json:"tiered_snapshot,omitempty"`
+	ModelPrice       float64                      `json:"model_price,omitempty"`        // 模型单价
+	GroupRatio       float64                      `json:"group_ratio,omitempty"`        // 分组倍率
+	ModelRatio       float64                      `json:"model_ratio,omitempty"`        // 模型倍率
+	OtherRatios      map[string]float64           `json:"other_ratios,omitempty"`       // 附加倍率（时长、分辨率等）
+	OriginModelName  string                       `json:"origin_model_name,omitempty"`  // 模型名称，必须为OriginModelName
+	PerCallBilling   bool                         `json:"per_call_billing,omitempty"`   // 按次计费：跳过轮询阶段的差额结算
+	PreConsumedQuota int                          `json:"pre_consumed_quota,omitempty"` // 提交时预扣额度，结算后 task.Quota 变为最终值
+	TieredSnapshot   *billingexpr.BillingSnapshot `json:"tiered_snapshot,omitempty"`
+}
+
+// TaskRequestSnapshot 记录任务提交时的请求素材，供任务详情展示。
+// 只保存提示词、标量参数和图片/视频 URL 等元数据，不保存二进制或内联 data URI 内容。
+type TaskRequestSnapshot struct {
+	Source     string             `json:"source,omitempty"` // 来源 API 路径，例如 /v1/videos
+	Model      string             `json:"model,omitempty"`
+	Prompt     string             `json:"prompt,omitempty"`
+	Parameters map[string]any     `json:"parameters,omitempty"`
+	Media      []TaskRequestMedia `json:"media,omitempty"`
+}
+
+// TaskRequestMedia 是请求中的一条参考素材。Kind 为 image/video，用于前端选择缩略图；
+// DurationSeconds 仅在本地探测成功时填写（参考视频，尽力而为）。
+type TaskRequestMedia struct {
+	Type            string  `json:"type,omitempty"`
+	Kind            string  `json:"kind"`
+	URL             string  `json:"url,omitempty"`
+	AssetID         string  `json:"asset_id,omitempty"` // 素材库引用（无 URL 时只记录标识）
+	Filename        string  `json:"filename,omitempty"` // 直接上传的素材（无 URL 时只记录文件名）
+	DurationSeconds float64 `json:"duration_seconds,omitempty"`
+	Inline          bool    `json:"inline,omitempty"`
 }
 
 // ResultRetrievable reports whether retrieval surfaces (native query routes,
@@ -213,8 +238,8 @@ func (p TaskPrivateData) Value() (driver.Value, error) {
 	if p.Key == "" && p.UpstreamTaskID == "" && p.ResultURL == "" &&
 		p.Execution == nil && p.BillingSource == "" && p.SubscriptionId == 0 &&
 		p.TokenId == 0 && p.NodeName == "" && p.BillingContext == nil &&
-		!p.ResponsesBackground && len(p.PluginState) == 0 && p.PollFailures == 0 &&
-		!p.ResultDiscarded {
+		p.RequestSnapshot == nil && !p.ResponsesBackground && len(p.PluginState) == 0 &&
+		p.PollFailures == 0 && !p.ResultDiscarded {
 		return nil, nil
 	}
 	// 同 Properties.Value:string 避免 PG simple protocol 的 bytea 编码。
@@ -543,6 +568,12 @@ func (Task *Task) Update() error {
 
 func (t *Task) UpdateQuota() error {
 	return DB.Model(t).Update("quota", t.Quota).Error
+}
+
+// UpdatePrivateData 持久化私有数据（含计费快照）。结算后快照被更新为
+// 最终计费口径，需要落库供任务查询响应与对账使用。
+func (t *Task) UpdatePrivateData() error {
+	return DB.Model(t).Update("private_data", t.PrivateData).Error
 }
 
 // UpdateWithStatus performs a conditional UPDATE guarded by fromStatus (CAS).

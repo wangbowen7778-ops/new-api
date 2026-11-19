@@ -32,12 +32,53 @@ export const meta = {
       },
       description: { en: "Output video dimensions", zh: "输出视频尺寸" },
     },
+    // Billing tier derived from `size`. Declared so tiered expressions can key
+    // off `u("resolution")` instead of having to know pixel dimensions.
+    resolution: {
+      enum: ["480P", "720P", "1080P"],
+      enumLabels: {
+        "480P": { en: "480P", zh: "480P" },
+        "720P": { en: "720P", zh: "720P" },
+        "1080P": { en: "1080P", zh: "1080P" },
+      },
+      description: { en: "Billing tier derived from output size", zh: "由输出尺寸推导的计费档位" },
+    },
   },
   protocols: [{ name: "openai_responses", supports: ["stream", "sync", "background"] }, "openai_video"],
 };
 
 function trimmed(value) {
   return String(value || "").trim();
+}
+
+// size → 计费档位。缺失映射时返回空串，由计费表达式自行决定如何兜底。
+const SIZE_RESOLUTION = {
+  "720x1280": "720P",
+  "1280x720": "720P",
+  "1792x1024": "1080P",
+  "1024x1792": "1080P",
+};
+
+const RESOLUTION_TIERS = ["480P", "720P", "1080P"];
+
+function resolutionForSize(size) {
+  return SIZE_RESOLUTION[trimmed(size)] || "";
+}
+
+// 客户端显式传的 resolution 优先（TD 协议用它定档），大小写不敏感。
+function explicitResolution(req) {
+  const value = trimmed(req && req.resolution).toUpperCase();
+  return RESOLUTION_TIERS.includes(value) ? value : "";
+}
+
+// 按名字大小写不敏感地取客户端请求头（Go 侧会规范化成 X-Td-Contract）。
+function clientHeader(headers, wanted) {
+  if (!headers) return "";
+  const target = wanted.toLowerCase();
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === target) return trimmed(headers[key]);
+  }
+  return "";
 }
 
 function responsesInput(req) {
@@ -87,7 +128,13 @@ function responsesVideoText(ctx) {
 }
 
 function requestValues(req, model) {
-  const values = Object.assign({}, req || {});
+  const values = {};
+  for (const key of Object.keys(req || {})) {
+    // 下划线开头的字段是网关注入的计费元数据（如 _reference_seconds），
+    // 只参与计费，不转发给上游。
+    if (key.charAt(0) === "_") continue;
+    values[key] = req[key];
+  }
   values.model = model;
   return values;
 }
@@ -97,6 +144,10 @@ export function buildSubmitRequest(ctx) {
   if (!String(req.prompt || "").trim()) throw new Error("field prompt is required");
   const action = ctx.action === "remix" ? "remix" : ctx.action;
   const headers = { Authorization: "Bearer " + ctx.apiKey };
+  // TD 契约头必须原样带到上游：上游据此走 TD 视频协议分支，
+  // 缺了它会把 duration/resolution 当成非法参数直接 400。
+  const contract = clientHeader(ctx.requestHeaders, "X-TD-Contract");
+  if (contract) headers["X-TD-Contract"] = contract;
   if (action === "remix") {
     headers["Content-Type"] = "application/json";
     return { url: ctx.baseUrl + "/v1/videos/" + ctx.originTaskId + "/remix", method: "POST", headers, body: requestValues(req, ctx.upstreamModel), action };
@@ -105,10 +156,15 @@ export function buildSubmitRequest(ctx) {
     const parts = [];
     const values = requestValues(req, ctx.upstreamModel);
     for (const key of Object.keys(values)) {
-      if (values[key] !== undefined && values[key] !== null && typeof values[key] !== "object") parts.push({ name: key, value: values[key] });
-    }
-    if (values.metadata && typeof values.metadata === "object" && !Array.isArray(values.metadata)) {
-      parts.push({ name: "metadata", value: JSON.stringify(values.metadata) });
+      const value = values[key];
+      if (value === undefined || value === null) continue;
+      if (typeof value === "object" && !Array.isArray(value)) {
+        // multipart 只能放字符串，嵌套对象（metadata、parameters）序列化后带上，
+        // 否则这类参数会在带参考图的请求里静默丢失。
+        parts.push({ name: key, value: JSON.stringify(value) });
+      } else if (typeof value !== "object") {
+        parts.push({ name: key, value: value });
+      }
     }
     for (const file of ctx.files) parts.push({ name: file.field, fileRef: file.ref, filename: file.filename });
     return { url: ctx.baseUrl + "/v1/videos", method: "POST", headers, bodyType: "multipart", parts };
@@ -128,16 +184,53 @@ export function extractUsage(ctx) {
   if (ctx.action === "remix") return {};
   const req = ctx.requestBody || {};
   let seconds = Number(req.seconds || req.duration || 4);
-  if (!Number.isFinite(seconds) || seconds <= 0) seconds = 4;
-  return { seconds: Math.min(seconds, 3600), size: req.size || "720x1280" };
+  if (!Number.isFinite(seconds) || (seconds <= 0 && seconds !== -1)) seconds = 4;
+  // -1 为自动时长：上游按模型默认档生成，计费快照按各模型默认时长预估
+  // （wan3.0-video-prime 默认 10 秒，wan3.0-video 默认 5 秒）。
+  if (seconds === -1) seconds = String(req.model || "").indexOf("prime") >= 0 ? 10 : 5;
+  // 预扣费口径：成片（输出）+ 参考视频（输入，本地精确探测）。
+  // 拆分写入 usage_facts，供任务日志展示输入/输出的计费构成。
+  const outputSeconds = Math.min(seconds, 3600);
+  const reference = Number(req._reference_seconds || 0);
+  const referenceSeconds = Number.isFinite(reference) && reference > 0 ? Math.round(reference * 100) / 100 : 0;
+  const totalSeconds = Math.min(outputSeconds + referenceSeconds, 3600);
+  const explicit = explicitResolution(req);
+  // 没传 resolution 也没传 size 时，沿用 sora 协议的历史默认值 720x1280，
+  // 避免计费表达式落到 else 的最贵档；一旦显式给了 resolution 就不再伪造 size。
+  const size = trimmed(req.size) || (explicit ? "" : "720x1280");
+  const facts = { seconds: totalSeconds, output_seconds: outputSeconds };
+  if (referenceSeconds > 0) facts.input_video_seconds = referenceSeconds;
+  if (size) facts.size = size;
+  // 计费表达式按档位判断，必须把档位一起回传，否则 u("resolution")
+  // 取到空值会落到表达式的 else 分支（最贵档）。
+  const resolution = explicit || resolutionForSize(size);
+  if (resolution) facts.resolution = resolution;
+  return facts;
 }
 
 export function extractUsageOnComplete(task, taskResult, body) {
   const facts = {};
-  const seconds = Number((body || {}).seconds || (body || {}).duration || 0);
-  if (Number.isFinite(seconds) && seconds > 0) facts.seconds = Math.min(seconds, 3600);
-  const size = trimmed((body || {}).size);
+  const source = body || {};
+  // 最终结算对齐上游口径：优先读响应里的 usage 块（input_seconds/output_seconds
+  // 是上游回报的最终计费值）；缺失或非 final 语义时回退到 seconds/duration，
+  // 保持预扣金额不变。
+  const usage = source.usage && typeof source.usage === "object" ? source.usage : null;
+  const usageUsable = usage !== null && (usage.usage_semantic === undefined || usage.usage_semantic === "final");
+  const inputSeconds = usageUsable ? Number(usage.input_seconds || 0) : 0;
+  const outputSeconds = usageUsable ? Number(usage.output_seconds || 0) : 0;
+  if (Number.isFinite(inputSeconds) && Number.isFinite(outputSeconds) && inputSeconds + outputSeconds > 0) {
+    facts.seconds = Math.min(inputSeconds + outputSeconds, 3600);
+    if (inputSeconds > 0) facts.input_video_seconds = inputSeconds;
+    if (outputSeconds > 0) facts.output_seconds = outputSeconds;
+  } else {
+    const seconds = Number(source.seconds || source.duration || 0);
+    if (Number.isFinite(seconds) && seconds > 0) facts.seconds = Math.min(seconds, 3600);
+  }
+  const explicit = explicitResolution(source);
+  const size = trimmed(source.size);
   if (["720x1280", "1280x720", "1792x1024", "1024x1792"].includes(size)) facts.size = size;
+  const resolution = explicit || resolutionForSize(size);
+  if (resolution) facts.resolution = resolution;
   return facts;
 }
 
@@ -236,6 +329,23 @@ export const protocols = {
   },
 };
 
+// 动作只用于任务日志与对账展示，不影响计费。多参考素材（多图、参考视频或
+// mode=multi_ref）记为 reference_to_video，与百炼插件保持同一口径。
+function videoTaskAction(req, hasUploadedReference) {
+  const input = req && typeof req.input === "object" && !Array.isArray(req.input) ? req.input : {};
+  const media = Array.isArray(input.media) ? input.media : [];
+  let hasVideo = false;
+  let images = 0;
+  for (const item of media) {
+    const type = item && typeof item === "object" ? String(item.type || "") : "";
+    if (type === "reference_video") hasVideo = true;
+    else if (type === "reference_image") images += 1;
+  }
+  if (hasVideo || images > 1 || req.mode === "multi_ref") return "reference_to_video";
+  if (images === 1 || hasUploadedReference || req.input_reference || req.image) return "image_to_video";
+  return "text_to_video";
+}
+
 const legacyRenderers = {
   openai_video: function (task) {
     const statuses = { NOT_START: "queued", SUBMITTED: "queued", QUEUED: "queued", IN_PROGRESS: "in_progress", SUCCESS: "completed", FAILURE: "failed" };
@@ -263,12 +373,13 @@ protocols.openai_video = {
       if (!ctx.body.value || Array.isArray(ctx.body.value)) throw new Error("JSON object required");
       const req = ctx.body.value;
       const seconds = req.seconds === undefined ? req.duration : req.seconds;
-      if (seconds !== undefined && (!Number.isFinite(Number(seconds)) || Number(seconds) <= 0 || Number(seconds) > 3600))
-        throw new Error("seconds must be between 1 and 3600");
+      // -1 为自动时长（wan3.0-video 支持），与 1–3600 一并放行
+      if (seconds !== undefined && (!Number.isFinite(Number(seconds)) || (Number(seconds) <= 0 && Number(seconds) !== -1) || Number(seconds) > 3600))
+        throw new Error("seconds must be -1 (auto) or between 1 and 3600");
       return {
         kind: "submit",
         model: ctx.model,
-        action: req.input_reference || req.image ? "image_to_video" : "text_to_video",
+        action: videoTaskAction(req, false),
         requestBody: Object.assign({}, req, { model: ctx.model }),
       };
     }
@@ -301,12 +412,13 @@ protocols.openai_video = {
     if (req.seconds !== undefined) req.seconds = Number(req.seconds);
     else if (req.duration !== undefined) req.seconds = Number(req.duration);
     const seconds = req.seconds === undefined ? req.duration : req.seconds;
-    if (seconds !== undefined && (!Number.isFinite(Number(seconds)) || Number(seconds) <= 0 || Number(seconds) > 3600))
-      throw new Error("seconds must be between 1 and 3600");
+    // -1 为自动时长（wan3.0-video 支持），与 1–3600 一并放行
+    if (seconds !== undefined && (!Number.isFinite(Number(seconds)) || (Number(seconds) <= 0 && Number(seconds) !== -1) || Number(seconds) > 3600))
+      throw new Error("seconds must be -1 (auto) or between 1 and 3600");
     return {
       kind: "submit",
       model: ctx.model,
-      action: hasInputReferenceFile || req.input_reference || req.image ? "image_to_video" : "text_to_video",
+      action: videoTaskAction(req, hasInputReferenceFile),
       requestBody: Object.assign({}, req, { model: ctx.model }),
     };
   },

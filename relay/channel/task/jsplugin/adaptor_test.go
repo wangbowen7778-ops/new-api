@@ -955,14 +955,21 @@ func TestTaskAdaptorMapsJSContract(t *testing.T) {
 
 	rendered, err := adaptor.ConvertToOpenAIVideo(&model.Task{TaskID: "task_public", Status: model.TaskStatusSuccess})
 	require.NoError(t, err)
-	assert.JSONEq(t, `{
-		"id":"task_public",
-		"object":"video",
-		"model":"",
-		"status":"completed",
-		"progress":0,
-		"created_at":0
-	}`, string(rendered))
+	var renderedFields map[string]any
+	require.NoError(t, common.Unmarshal(rendered, &renderedFields))
+	assert.Equal(t, "task_public", renderedFields["id"])
+	assert.Equal(t, "video", renderedFields["object"])
+	assert.Equal(t, "", renderedFields["model"])
+	assert.Equal(t, "completed", renderedFields["status"])
+	assert.Equal(t, float64(0), renderedFields["progress"])
+	assert.Equal(t, float64(0), renderedFields["created_at"])
+	// 成功任务的内容地址统一为网关 /content 形式。
+	assert.True(t, strings.HasSuffix(renderedFields["url"].(string), "/v1/videos/task_public/content"), renderedFields["url"])
+	assert.Equal(t, map[string]any{
+		"input_seconds": float64(0), "output_seconds": float64(0),
+		"input_video_seconds": float64(0), "output_video_seconds": float64(0),
+		"billable_seconds": float64(0), "usage_semantic": "final",
+	}, renderedFields["usage"])
 	_, err = plugin.Engine.Export(context.Background(), "meta")
 	require.NoError(t, err)
 }
@@ -1076,7 +1083,7 @@ export function parseBatchResult() { return {}; }
 	}
 }
 
-func TestTaskAdaptorPreservesSoraVideoResponseFields(t *testing.T) {
+func TestTaskAdaptorRendersStandardOpenAIVideoFields(t *testing.T) {
 	source, err := plugins.Source("sora")
 	require.NoError(t, err)
 	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
@@ -1129,24 +1136,79 @@ func TestTaskAdaptorPreservesSoraVideoResponseFields(t *testing.T) {
 			} else {
 				assert.NotContains(t, fields, "completed_at")
 			}
-			assert.Equal(t, "https://cdn.example/video.mp4", fields["url"])
+			// 上游扩展字段一律丢弃，字段集合按渠道固定，下游无需按渠道分支。
+			assert.NotContains(t, fields, "metadata")
+			assert.NotContains(t, fields, "provider_payload")
+			assert.NotContains(t, fields, "seconds")
+			assert.NotContains(t, fields, "resolution")
+			assert.NotContains(t, fields, "aspect_ratio")
+			assert.NotContains(t, fields, "reference_images")
+			// 成功任务下发上游直链（无需令牌即可下载），非成功任务不带 url。
+			result, hasURL := fields["url"].(string)
+			if tc.status == model.TaskStatusSuccess {
+				require.True(t, hasURL)
+				assert.Equal(t, "https://cdn.example/video.mp4", result)
+			} else {
+				assert.False(t, hasURL)
+			}
+			semantic := "reserved"
+			if tc.status != model.TaskStatusInProgress {
+				semantic = "final"
+			}
 			assert.Equal(t, map[string]any{
-				"url": "https://cdn.example/video.mp4",
-				"URL": "https://cdn.example/uppercase.mp4",
-			}, fields["metadata"])
-			assert.Equal(t, map[string]any{
-				"task_id": "task_public",
-				"items":   []any{map[string]any{"enabled": false, "count": float64(0), "value": nil}},
-			}, fields["provider_payload"])
-			assert.Equal(t, float64(8), fields["seconds"])
-			assert.Equal(t, "720p", fields["resolution"])
-			assert.Equal(t, "16:9", fields["aspect_ratio"])
-			assert.Equal(t, []any{"https://cdn.example/reference.png"}, fields["reference_images"])
-			assert.Equal(t, map[string]any{
-				"code": "provider_error", "message": "provider rejected request",
-				"detail": map[string]any{"retryable": false},
-			}, fields["error"])
+				"input_seconds": float64(0), "output_seconds": float64(0),
+				"input_video_seconds": float64(0), "output_video_seconds": float64(0),
+				"billable_seconds": float64(0), "usage_semantic": semantic,
+			}, fields["usage"])
+			if tc.status == model.TaskStatusFailure {
+				assert.Equal(t, map[string]any{
+					"code": "provider_error", "message": "provider rejected request",
+					"detail": map[string]any{"retryable": false},
+				}, fields["error"])
+			} else {
+				assert.NotContains(t, fields, "error")
+			}
 		})
+	}
+}
+
+// 所有渠道的查询响应必须同一套字段、同一个内容地址形态：渠道间只允许数值不同，
+// 不允许字段名或结构不同。
+func TestTaskAdaptorVideoResponseShapeIsChannelIndependent(t *testing.T) {
+	previousAddress := system_setting.ServerAddress
+	system_setting.ServerAddress = "https://gateway.example"
+	t.Cleanup(func() { system_setting.ServerAddress = previousAddress })
+
+	source, err := plugins.Source("sora")
+	require.NoError(t, err)
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+
+	task := &model.Task{
+		TaskID:      "task_shape",
+		Status:      model.TaskStatusSuccess,
+		Progress:    "100%",
+		CreatedAt:   100,
+		FinishTime:  200,
+		Properties:  model.Properties{OriginModelName: "wan3.0-video"},
+		PrivateData: model.TaskPrivateData{ResultURL: "https://dashscope.example/signed.mp4?Expires=1"},
+		Data:        []byte(`{"request_id":"abc","metadata":{"url":"https://dashscope.example/signed.mp4"},"usage":{"duration":20}}`),
+	}
+
+	rendered, err := New(plugin).ConvertToOpenAIVideo(task)
+	require.NoError(t, err)
+	var fields map[string]any
+	require.NoError(t, common.Unmarshal(rendered, &fields))
+	// 网关代理地址需要令牌，不能下发；这里取上游直链（此处已落库在 result_url）。
+	assert.Equal(t, "https://dashscope.example/signed.mp4?Expires=1", fields["url"])
+	assert.NotContains(t, fields, "metadata")
+	assert.NotContains(t, fields, "request_id")
+	allowed := map[string]bool{
+		"id": true, "object": true, "model": true, "status": true, "progress": true,
+		"created_at": true, "completed_at": true, "url": true, "error": true, "usage": true,
+	}
+	for key := range fields {
+		assert.Truef(t, allowed[key], "unexpected field %q in video response", key)
 	}
 }
 
@@ -1188,7 +1250,110 @@ func TestTaskAdaptorPreservesOpenAIVideoFailureSlotsAndOwnsLifecycle(t *testing.
 	rendered, err := adaptor.ConvertToOpenAIVideo(task)
 
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"id":"task_public","object":"video","model":"origin-model","status":"failed","progress":0,"created_at":10,"error":{"message":"provider rejected request","code":"provider_error"}}`, string(rendered))
+	assert.JSONEq(t, `{"id":"task_public","object":"video","model":"origin-model","status":"failed","progress":0,"created_at":10,"error":{"message":"provider rejected request","code":"provider_error"},"usage":{"input_seconds":0,"output_seconds":0,"input_video_seconds":0,"output_video_seconds":0,"billable_seconds":0,"usage_semantic":"final"}}`, string(rendered))
+}
+
+// 百炼与第三方中转的用量字段名不同，对客必须是同一组 usage 键与同一套数值。
+func TestTaskAdaptorRendersIdenticalUsageAcrossPlugins(t *testing.T) {
+	want := map[string]any{
+		"input_seconds":        10.0,
+		"output_seconds":       2.0,
+		"input_video_seconds":  10.0,
+		"output_video_seconds": 2.0,
+		"billable_seconds":     12.0,
+		"usage_semantic":       "final",
+	}
+	for _, key := range []string{"sora", "alibaba"} {
+		t.Run(key, func(t *testing.T) {
+			source, err := plugins.Source(key)
+			require.NoError(t, err)
+			plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+			require.NoError(t, err)
+			task := &model.Task{
+				TaskID:     "task_public",
+				Status:     model.TaskStatusSuccess,
+				CreatedAt:  100,
+				FinishTime: 200,
+				Properties: model.Properties{OriginModelName: "wan3.0-video"},
+				Data:       []byte(`{"id":"upstream","status":"completed","usage":{"duration":2,"input_video_duration":10}}`),
+				PrivateData: model.TaskPrivateData{
+					UpstreamTaskID: "upstream",
+					BillingContext: &model.TaskBillingContext{
+						TieredSnapshot: &billingexpr.BillingSnapshot{UsageFacts: map[string]any{
+							"seconds": 12.0, "output_seconds": 2.0, "input_video_seconds": 10.0, "resolution": "480P",
+						}},
+					},
+				},
+			}
+
+			rendered, err := New(plugin).ConvertToOpenAIVideo(task)
+			require.NoError(t, err)
+			var fields map[string]any
+			require.NoError(t, common.Unmarshal(rendered, &fields))
+			assert.Equal(t, want, fields["usage"])
+		})
+	}
+}
+
+// 历史任务没有结算快照时，上游 usage 的各自写法仍要落到同一组键。
+func TestTaskAdaptorRendersUsageFromUpstreamFields(t *testing.T) {
+	source, err := plugins.Source("alibaba")
+	require.NoError(t, err)
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	task := &model.Task{
+		TaskID:    "task_public",
+		Status:    model.TaskStatusSuccess,
+		CreatedAt: 100,
+		Data:      []byte(`{"output":{"task_status":"SUCCEEDED","video_url":"https://cdn.example/out.mp4"},"usage":{"duration":2,"SR":480,"output_video_duration":2,"input_video_duration":5}}`),
+	}
+
+	rendered, err := New(plugin).ConvertToOpenAIVideo(task)
+	require.NoError(t, err)
+	var fields map[string]any
+	require.NoError(t, common.Unmarshal(rendered, &fields))
+	assert.Equal(t, map[string]any{
+		"input_seconds":        5.0,
+		"output_seconds":       2.0,
+		"input_video_seconds":  5.0,
+		"output_video_seconds": 2.0,
+		"billable_seconds":     7.0,
+		"usage_semantic":       "final",
+	}, fields["usage"])
+}
+
+// 任务未结束时 usage 是预扣口径，语义标记为 reserved。
+func TestTaskAdaptorRendersReservedUsageWhileRunning(t *testing.T) {
+	source, err := plugins.Source("alibaba")
+	require.NoError(t, err)
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	task := &model.Task{
+		TaskID:    "task_public",
+		Status:    model.TaskStatusInProgress,
+		CreatedAt: 100,
+		Data:      []byte(`{"output":{"task_status":"RUNNING"}}`),
+		PrivateData: model.TaskPrivateData{
+			BillingContext: &model.TaskBillingContext{
+				TieredSnapshot: &billingexpr.BillingSnapshot{UsageFacts: map[string]any{
+					"seconds": 7.06, "output_seconds": 2.0, "input_video_seconds": 5.06,
+				}},
+			},
+		},
+	}
+
+	rendered, err := New(plugin).ConvertToOpenAIVideo(task)
+	require.NoError(t, err)
+	var fields map[string]any
+	require.NoError(t, common.Unmarshal(rendered, &fields))
+	assert.Equal(t, map[string]any{
+		"input_seconds":        5.06,
+		"output_seconds":       2.0,
+		"input_video_seconds":  5.06,
+		"output_video_seconds": 2.0,
+		"billable_seconds":     7.06,
+		"usage_semantic":       "reserved",
+	}, fields["usage"])
 }
 
 func TestTaskAdaptorBoundsNativeUsageBeforeQuotaCalculation(t *testing.T) {

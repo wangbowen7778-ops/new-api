@@ -342,6 +342,11 @@ export interface TaskLog {
     upstream_model_name?: string
     origin_model_name?: string
   }
+  // Sanitized submit-time request snapshot (prompt, scalar parameters, and
+  // reference media URLs with probed durations). Absent on older tasks.
+  request?: TaskRequestInfo
+  // Settled usage facts used to render the billable-second breakdown.
+  billing?: TaskBillingInfo
   legacy_video_available?: boolean
   // A synchronous result returned inline and never persisted; artifact
   // retrieval is not offered for it.
@@ -360,6 +365,32 @@ export interface TaskLog {
   }
   created_at?: number
   updated_at?: number
+}
+
+export type TaskRequestMediaKind = 'image' | 'video'
+
+export interface TaskRequestMedia {
+  type?: string
+  kind: TaskRequestMediaKind
+  url?: string
+  asset_id?: string
+  filename?: string
+  duration_seconds?: number
+  inline?: boolean
+}
+
+export interface TaskRequestInfo {
+  source?: string
+  model?: string
+  prompt?: string
+  parameters?: Record<string, unknown>
+  media?: TaskRequestMedia[]
+}
+
+export interface TaskBillingInfo {
+  pre_consumed_quota?: number
+  usage_facts?: Record<string, string | number>
+  matched_tier?: string
 }
 
 export interface TaskPluginInfo {

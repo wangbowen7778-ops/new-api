@@ -71,6 +71,8 @@ import {
 } from '../lib/task-artifacts'
 import type { TaskArtifact, TaskArtifactType, TaskLog } from '../types'
 import { AudioPreviewDialog } from './dialogs/audio-preview-dialog'
+import { TaskCostBreakdown } from './task-cost-breakdown'
+import { TaskDetailSummary } from './task-detail-summary'
 
 function artifactIcon(type: TaskArtifactType) {
   switch (type) {
@@ -473,18 +475,34 @@ export function TaskArtifactsCell(props: { log: TaskLog }) {
           )
         }
         contentClassName={
-          previewMode === 'legacy-video' ? 'sm:max-w-xl' : 'sm:max-w-4xl'
+          previewMode === 'legacy-video' ? 'sm:max-w-xl' : 'sm:max-w-5xl'
         }
         contentHeight='auto'
         bodyClassName='pr-2 sm:pr-4'
       >
-        <TaskArtifacts
-          taskId={props.log.task_id}
-          enabled={shouldLoadTaskArtifacts(props.log, open)}
-          emptyContent={(legacyContentUrl) => (
-            <LegacyTaskArtifacts legacyContentUrl={legacyContentUrl} />
+        <div
+          className={cn(
+            'grid min-w-0 gap-4',
+            previewMode !== 'legacy-video' &&
+              'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]'
           )}
-        />
+        >
+          <div className='min-w-0'>
+            <TaskArtifacts
+              taskId={props.log.task_id}
+              enabled={shouldLoadTaskArtifacts(props.log, open)}
+              emptyContent={(legacyContentUrl) => (
+                <LegacyTaskArtifacts legacyContentUrl={legacyContentUrl} />
+              )}
+            />
+          </div>
+          {previewMode !== 'legacy-video' ? (
+            <div className='min-w-0 space-y-3'>
+              <TaskDetailSummary log={props.log} />
+              <TaskCostBreakdown log={props.log} />
+            </div>
+          ) : null}
+        </div>
       </Dialog>
     </>
   )

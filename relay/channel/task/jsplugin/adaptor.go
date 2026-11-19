@@ -222,9 +222,20 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		}
 	}
 	if _, exists := c.Get("task_request"); !exists {
-		if taskErr := relaycommon.ValidateBasicTaskRequest(c, info, "image_to_video"); taskErr != nil {
+		// 动作由请求内容推导（有参考图才算 image_to_video），不在这里写死。
+		if taskErr := relaycommon.ValidateBasicTaskRequest(c, info, ""); taskErr != nil {
 			return taskErr
 		}
+	}
+	// 资产库引用：asset_id 只能在上传它的那个渠道下使用，提前拦住跨渠道引用。
+	if taskErr := validateTaskMaterialBindings(c, info); taskErr != nil {
+		return taskErr
+	}
+	// 参考视频计费：官方口径为 video_total_seconds（成片 + 参考视频）。
+	// 探测时长、校验官方限制，并把参考视频总时长注入请求体（下划线字段，
+	// 插件构造上游请求体时会剥离）供 extractUsage 计入计费秒数。
+	if taskErr := probeAndValidateReferenceVideos(c); taskErr != nil {
+		return taskErr
 	}
 	if _, err := a.buildSubmit(c, info); err != nil {
 		// utils.fetch failures in the build hook name the host fetched: the
@@ -1199,22 +1210,42 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(task *model.Task) ([]byte, error) {
 	if rendered == nil {
 		return nil, fmt.Errorf("plugin returned an invalid OpenAI video object")
 	}
-	// Keep provider extensions intact while the host owns the public task's
-	// identity and lifecycle, including completion timestamps after settlement.
+	// 对客只暴露标准成员。上游扩展字段（metadata、request_id、
+	// contract_version 等）按渠道不同，透传出去会让下游按渠道写分支；
+	// 字段集合固定为 id/object/model/status/progress/created_at/
+	// completed_at/url/error/usage。
 	host := task.ToOpenAIVideo()
-	rendered["id"] = host.ID
-	rendered["object"] = host.Object
-	delete(rendered, "task_id")
-	rendered["status"] = host.Status
-	rendered["progress"] = host.Progress
-	rendered["created_at"] = host.CreatedAt
-	rendered["model"] = host.Model
+	standard := make(map[string]any, 10)
+	standard["id"] = host.ID
+	standard["object"] = host.Object
+	standard["model"] = host.Model
+	standard["status"] = host.Status
+	standard["progress"] = host.Progress
+	standard["created_at"] = host.CreatedAt
 	if host.CompletedAt != 0 {
-		rendered["completed_at"] = host.CompletedAt
-	} else {
-		delete(rendered, "completed_at")
+		standard["completed_at"] = host.CompletedAt
 	}
-	return common.Marshal(rendered)
+	if task.Status == model.TaskStatusSuccess {
+		// 对客下发可直接访问的上游直链：网关 /content 需要令牌，下游拿不到就播不了。
+		// 上游没给地址时回退到网关内容地址（此时需要令牌）。
+		if upstream := service.TaskUpstreamVideoURL(task); upstream != "" {
+			standard["url"] = upstream
+		} else if proxy := taskcommon.BuildProxyURL(task.TaskID); strings.HasPrefix(proxy, "http://") || strings.HasPrefix(proxy, "https://") {
+			standard["url"] = proxy
+		}
+	}
+	// 只有失败任务才暴露 error，避免上游预置的字段时间歇性出现在正常任务上。
+	if task.Status == model.TaskStatusFailure {
+		if failure, exists := rendered["error"]; exists && failure != nil {
+			standard["error"] = failure
+		}
+	}
+	// 各上游的用量字段并不一致（百炼给 input_video_duration，第三方中转给
+	// input_seconds 等），对客统一成固定键集合，数值取本地结算快照，与扣费
+	// 严格一致；任务未结束时该快照就是预扣口径。
+	upstreamUsage, _ := rendered["usage"].(map[string]any)
+	standard["usage"] = service.TaskVideoUsageWithUpstream(task, upstreamUsage)
+	return common.Marshal(standard)
 }
 
 func (a *TaskAdaptor) ListArtifacts(task *model.Task) ([]channel.TaskArtifact, error) {

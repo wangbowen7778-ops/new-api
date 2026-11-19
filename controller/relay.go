@@ -665,13 +665,19 @@ func executeTaskSubmissionWith(
 	task.PrivateData.TokenId = relayInfo.TokenId
 	task.PrivateData.NodeName = common.NodeName
 	task.PrivateData.BillingContext = &model.TaskBillingContext{
-		ModelPrice:      relayInfo.PriceData.ModelPrice,
-		GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
-		ModelRatio:      relayInfo.PriceData.ModelRatio,
-		OtherRatios:     relayInfo.PriceData.OtherRatios(),
-		OriginModelName: relayInfo.OriginModelName,
-		PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
-		TieredSnapshot:  relayInfo.TieredBillingSnapshot,
+		ModelPrice:       relayInfo.PriceData.ModelPrice,
+		GroupRatio:       relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+		ModelRatio:       relayInfo.PriceData.ModelRatio,
+		OtherRatios:      relayInfo.PriceData.OtherRatios(),
+		OriginModelName:  relayInfo.OriginModelName,
+		PerCallBilling:   common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
+		PreConsumedQuota: result.Quota,
+		TieredSnapshot:   relayInfo.TieredBillingSnapshot,
+	}
+	if requestValue, exists := c.Get("task_request"); exists {
+		if requestBody, ok := requestValue.(map[string]any); ok {
+			task.PrivateData.RequestSnapshot = service.BuildTaskRequestSnapshot(c.Request.URL.Path, requestBody)
+		}
 	}
 	task.Quota = result.Quota
 	task.Data = result.TaskData
@@ -803,22 +809,33 @@ func presentTaskSubmission(c *gin.Context, outcome *taskSubmissionOutcome) {
 	if pinnedValue, exists := c.Get(pluginruntime.ContextKeyPinnedEndpoint); exists {
 		if pinned, ok := pinnedValue.(pluginruntime.PinnedEndpoint); ok && pinned.Protocol == "openai_video" && pinned.Operation.Name == "create" {
 			diagnostics.present(outcome.Task, "openai_video_create")
-			c.JSON(http.StatusOK, outcome.Task.ToOpenAIVideo())
+			c.JSON(http.StatusOK, taskSubmittedVideoBody(outcome.Task, outcome.RelayInfo.OriginModelName))
 			return
 		}
 	}
-	createdAt := outcome.Task.CreatedAt
-	if createdAt == 0 {
-		createdAt = outcome.Task.SubmitTime
-	}
 	diagnostics.present(outcome.Task, "host_fallback")
-	c.JSON(http.StatusOK, map[string]any{
-		"id":         outcome.Task.TaskID,
-		"task_id":    outcome.Task.TaskID,
+	c.JSON(http.StatusOK, taskSubmittedVideoBody(outcome.Task, outcome.RelayInfo.OriginModelName))
+}
+
+// taskSubmittedVideoBody 统一提交响应的形状：不同渠道（百炼、第三方中转）
+// 返回同一组字段，usage 是预扣口径，与查询接口的结算口径使用同一套键。
+func taskSubmittedVideoBody(task *model.Task, modelName string) map[string]any {
+	if modelName == "" {
+		modelName = task.Properties.OriginModelName
+	}
+	createdAt := task.CreatedAt
+	if createdAt == 0 {
+		createdAt = task.SubmitTime
+	}
+	return map[string]any{
+		"id":         task.TaskID,
+		"object":     "video",
+		"model":      modelName,
 		"status":     "queued",
-		"model":      outcome.RelayInfo.OriginModelName,
+		"progress":   0,
 		"created_at": createdAt,
-	})
+		"usage":      service.TaskVideoUsage(task),
+	}
 }
 
 func respondTaskSubmissionError(c *gin.Context, taskErr *taskdto.TaskError) {

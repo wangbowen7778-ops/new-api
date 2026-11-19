@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -400,6 +401,9 @@ func TestAlibabaWanModelCapabilities(t *testing.T) {
 			schema, _ := plugin.Meta.UsageForModel(tc.model)
 			assert.Equal(t, tc.allowed, schema["resolution"].Enum)
 			wantFacts := map[string]any{"seconds": tc.seconds, "resolution": tc.resolution}
+			if tc.model == "wan3.0-video" || tc.model == "wan3.0-video-prime" {
+				wantFacts["output_seconds"] = tc.seconds
+			}
 			if tc.model == "wan2.6-i2v-flash" {
 				wantFacts["audio"] = true // priced separately for silent output; defaults to audio
 			}
@@ -607,6 +611,14 @@ func TestAlibabaWanMediaInputs(t *testing.T) {
 	last := "https://cdn.example/last.png"
 	audio := "https://cdn.example/audio.mp3"
 	clip := "https://cdn.example/clip.mp4"
+	// A multi_ref request at the documented limits: eight reference images and
+	// one reference video, with the host-probed reference duration folded into
+	// the reservation.
+	multiRef := make([]any, 0, 9)
+	for i := range 8 {
+		multiRef = append(multiRef, map[string]any{"type": "reference_image", "url": "https://cdn.example/ref-" + strconv.Itoa(i+1) + ".png"})
+	}
+	multiRef = append(multiRef, map[string]any{"type": "reference_video", "url": clip})
 	for _, tc := range []struct {
 		name    string
 		model   string
@@ -620,6 +632,7 @@ func TestAlibabaWanMediaInputs(t *testing.T) {
 		{"digital human", "wan2.2-s2v", map[string]any{"image": first, "audio_url": audio}, map[string]any{"image_url": first, "audio_url": audio}, 20},
 		{"2.7 continuation counts total duration", "wan2.7-i2v", map[string]any{"duration": 15, "metadata": map[string]any{"input": map[string]any{"media": []any{map[string]any{"type": "first_clip", "url": clip}, map[string]any{"type": "last_frame", "url": last}}}}}, map[string]any{"media": []any{map[string]any{"type": "first_clip", "url": clip}, map[string]any{"type": "last_frame", "url": last}}}, 15},
 		{"Wan3 reference video reserves input and output", "wan3.0-video", map[string]any{"duration": 5, "media": []any{map[string]any{"type": "reference_video", "url": clip}, map[string]any{"type": "reference_audio", "url": audio}}}, map[string]any{"media": []any{map[string]any{"type": "reference_video", "url": clip}, map[string]any{"type": "reference_audio", "url": audio}}}, 30},
+		{"Wan3 multi_ref eight reference images and one video", "wan3.0-video", map[string]any{"prompt": "follow the references", "duration": 15, "resolution": "480P", "ratio": "9:16", "media": multiRef, "_reference_seconds": float64(5)}, map[string]any{"prompt": "follow the references", "media": multiRef}, 20},
 		{"Wan3 frame pair", "wan3.0-video-prime", map[string]any{"images": []string{first, last}, "audio": false}, map[string]any{"media": []any{map[string]any{"type": "first_frame", "url": first}, map[string]any{"type": "last_frame", "url": last}}}, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -662,8 +675,8 @@ func TestAlibabaWanCompletionFactsAndArtifacts(t *testing.T) {
 		facts map[string]any
 	}{
 		{"digital human fractional duration", "wan2.2-s2v", map[string]any{"duration": 18.13, "SR": 480}, map[string]any{"seconds": 18.13, "resolution": "480P"}},
-		{"Wan3 input plus output", "wan3.0-video", map[string]any{"input_video_duration": 4.25, "output_video_duration": 6.5, "duration": 6.5, "SR": 720}, map[string]any{"seconds": 10.75, "resolution": "720P"}},
-		{"Wan3 without reference video", "wan3.0-video-prime", map[string]any{"input_video_duration": 0, "output_video_duration": 8, "SR": 1080}, map[string]any{"seconds": float64(8), "resolution": "1080P"}},
+		{"Wan3 input plus output", "wan3.0-video", map[string]any{"input_video_duration": 4.25, "output_video_duration": 6.5, "duration": 6.5, "SR": 720}, map[string]any{"seconds": 10.75, "output_seconds": 6.5, "input_video_seconds": 4.25, "resolution": "720P"}},
+		{"Wan3 without reference video", "wan3.0-video-prime", map[string]any{"input_video_duration": 0, "output_video_duration": 8, "SR": 1080}, map[string]any{"seconds": float64(8), "output_seconds": float64(8), "resolution": "1080P"}},
 		{"Wan3 missing input duration preserves reserved seconds", "wan3.0-video", map[string]any{"output_video_duration": 6, "SR": 720}, map[string]any{"resolution": "720P"}},
 		{"2.7 continuation uses total duration", "wan2.7-i2v", map[string]any{"duration": 15, "output_video_duration": 12, "SR": 1080}, map[string]any{"seconds": float64(15), "resolution": "1080P"}},
 		{"flash silent output settles as silent", "wan2.6-i2v-flash", map[string]any{"duration": 5, "SR": 720, "audio": false}, map[string]any{"seconds": float64(5), "resolution": "720P", "audio": false}},
@@ -1129,19 +1142,19 @@ func TestAlibabaNativeRequestsGoAsSent(t *testing.T) {
 			name: "a video task without X-DashScope-Async", path: "/api/v1/services/aigc/video-generation/video-synthesis", decoder: "createVideoTask",
 			body:    map[string]any{"model": "wan3.0-video", "input": map[string]any{"prompt": "a cat"}},
 			wantURL: "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis", wantHeaders: map[string]any{"X-DashScope-Async": "enable"},
-			wantFacts: map[string]any{"seconds": float64(5), "resolution": "1080P"}, wantVideoBody: true,
+			wantFacts: map[string]any{"seconds": float64(5), "output_seconds": float64(5), "resolution": "1080P"}, wantVideoBody: true,
 		},
 		{
 			name: "a video model at another endpoint", path: "/ali/api/v1/services/aigc/image2video/video-synthesis", decoder: "createVideoTask",
 			body:    map[string]any{"model": "wan3.0-video", "input": map[string]any{"prompt": "a cat"}},
 			wantURL: "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis", wantHeaders: map[string]any{"X-DashScope-Async": "enable"},
-			wantFacts: map[string]any{"seconds": float64(5), "resolution": "1080P"}, wantVideoBody: true,
+			wantFacts: map[string]any{"seconds": float64(5), "output_seconds": float64(5), "resolution": "1080P"}, wantVideoBody: true,
 		},
 		{
 			name: "an alias goes as the channel's model", path: "/api/v1/services/aigc/video-generation/video-synthesis", decoder: "createVideoTask",
 			body: map[string]any{"model": "my-wan", "input": map[string]any{"prompt": "a cat"}}, upstream: "wan3.0-video",
 			wantURL: "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis", wantHeaders: map[string]any{"X-DashScope-Async": "enable"},
-			wantFacts: map[string]any{"seconds": float64(5), "resolution": "1080P"}, wantVideoBody: true,
+			wantFacts: map[string]any{"seconds": float64(5), "output_seconds": float64(5), "resolution": "1080P"}, wantVideoBody: true,
 		},
 		{
 			name: "interleaved output without X-DashScope-Sse", path: "/api/v1/services/aigc/multimodal-generation/generation", decoder: "createImageTask",

@@ -788,6 +788,35 @@ function objectValue(value, name) {
   return value;
 }
 
+// DashScope's own video body carries input and parameters at the top level,
+// and the public TD contract asks clients for the same two objects. The
+// converter reads metadata, so fold them in before it runs; an explicit
+// metadata value stays authoritative, and anything that is not a plain object
+// is left for the converter's own validation to reject.
+function foldNativeObjects(req) {
+  if (!req || typeof req !== "object" || Array.isArray(req)) return req;
+  const folded = {};
+  for (const key of ["input", "parameters"]) {
+    let value = req[key];
+    if (typeof value === "string") {
+      try {
+        value = JSON.parse(value);
+      } catch (e) {
+        continue;
+      }
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    folded[key] = value;
+  }
+  if (!Object.keys(folded).length) return req;
+  if (req.metadata !== undefined && (!req.metadata || typeof req.metadata !== "object" || Array.isArray(req.metadata))) return req;
+  const metadata = Object.assign({}, req.metadata);
+  if (folded.input) metadata.input = Object.assign({}, folded.input, objectValue(metadata.input, "metadata.input"));
+  if (folded.parameters) metadata.parameters = Object.assign({}, folded.parameters, objectValue(metadata.parameters, "metadata.parameters"));
+  req.metadata = metadata;
+  return req;
+}
+
 // Decoders fold wan3.0's "-1 = smart duration" sentinel, wherever the client
 // put it, into one boolean marker; convert sends -1 upstream and extractUsage
 // reserves 30 seconds, the longest wan3.0 output, for it.
@@ -837,6 +866,19 @@ function videoSize(value) {
 
 function videoAction(req) {
   const input = objectValue((req.metadata || {}).input, "metadata.input");
+  // 多参考素材（多图、参考视频或 mode=multi_ref）记为 reference_to_video，
+  // 与 sora 插件保持同一口径；单图/首帧仍是 image_to_video。
+  for (const source of [req, input]) {
+    const media = Array.isArray(source.media) ? source.media : [];
+    let hasVideo = false;
+    let images = 0;
+    for (const item of media) {
+      const type = item && typeof item === "object" ? String(item.type || "") : "";
+      if (type === "reference_video") hasVideo = true;
+      else if (type === "reference_image") images += 1;
+    }
+    if (hasVideo || images > 1 || source.mode === "multi_ref" || req.mode === "multi_ref") return "reference_to_video";
+  }
   for (const source of [req, input]) {
     if (
       firstImage(source) ||
@@ -851,7 +893,7 @@ function videoAction(req) {
 }
 
 function convert(ctx) {
-  const req = ctx.requestBody;
+  const req = foldNativeObjects(ctx.requestBody);
   const upstreamModel = ctx.upstreamModel || req.model;
   const profile = modelProfile(upstreamModel);
   const metadata = objectValue(req.metadata, "metadata");
@@ -1197,9 +1239,14 @@ export function extractUsage(ctx) {
   const hasVideo = (body.input.media || []).some(function (media) {
     return media.type === "reference_video";
   });
-  let seconds = body.parameters.duration;
-  if (kind === "speech") seconds = 20;
-  else if (kind === "all" && (hasVideo || seconds === -1)) seconds = 30;
+  const referenceSeconds = kind === "all" ? probedReferenceSeconds(ctx.requestBody) : 0;
+  let outputSeconds = body.parameters.duration;
+  if (kind === "speech") outputSeconds = 20;
+  else if (kind === "all" && outputSeconds === -1) outputSeconds = 30;
+  // A reference video whose duration could not be probed keeps the historical
+  // 30-second reservation; once probed, reserve output + reference seconds.
+  const unreservedReference = kind === "all" && hasVideo && referenceSeconds === 0;
+  const seconds = unreservedReference ? 30 : Math.min(outputSeconds + referenceSeconds, 3600);
   if (ctx.usagePurpose === "billing_ratios") {
     const ratios = { seconds: seconds };
     const resolution = resolutionRatio(body);
@@ -1208,8 +1255,19 @@ export function extractUsage(ctx) {
   }
   const resolution = body.parameters.size ? videoSize(body.parameters.size).resolution : body.parameters.resolution;
   const facts = { seconds: seconds, resolution: resolution };
+  if (kind === "all" && !unreservedReference) {
+    facts.output_seconds = outputSeconds;
+    if (referenceSeconds > 0) facts.input_video_seconds = referenceSeconds;
+  }
   if (WAN_AUDIO_VIDEO_MODELS.includes(modelKey(body.model))) facts.audio = body.parameters.audio !== false;
   return facts;
+}
+
+// 参考视频总时长由宿主 media_probe 注入（尽力而为，探测失败为 0）。
+function probedReferenceSeconds(requestBody) {
+  const value = Number((requestBody || {})._reference_seconds);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.round(Math.min(value, 3600) * 100) / 100;
 }
 
 export function extractUsageOnSubmit(ctx, body) {
@@ -1237,7 +1295,12 @@ export function extractUsageOnComplete(task, taskResult, body) {
     if (inputSeconds != null && outputSeconds != null) {
       if (typeof inputSeconds !== "number" || !Number.isFinite(inputSeconds) || inputSeconds < 0) facts.seconds = inputSeconds;
       else if (typeof outputSeconds !== "number" || !Number.isFinite(outputSeconds) || outputSeconds < 0) facts.seconds = outputSeconds;
-      else facts.seconds = inputSeconds + outputSeconds;
+      else {
+        facts.seconds = Math.min(inputSeconds + outputSeconds, 3600);
+        // 拆分事实仅用于日志/详情展示，计费仍以合并后的 seconds 为准。
+        if (outputSeconds > 0) facts.output_seconds = Math.min(outputSeconds, 3600);
+        if (inputSeconds > 0) facts.input_video_seconds = Math.min(inputSeconds, 3600);
+      }
     }
   } else {
     const seconds = usage.duration ?? usage.output_video_duration ?? output.duration ?? output.duration_seconds;
@@ -1636,6 +1699,7 @@ export const protocols = {
       } else throw new Error("JSON or multipart body required");
       if (!req || typeof req !== "object" || Array.isArray(req)) throw new Error("request body must be an object");
       if (req.images !== undefined && !Array.isArray(req.images)) throw new Error("images must be an array");
+      foldNativeObjects(req);
       const requestBody = normalizeRequest(Object.assign({}, req, { model: ctx.model }));
       // native records what a native client asked for; clients of this protocol cannot set it.
       delete requestBody.native;
@@ -1668,6 +1732,10 @@ export const protocols = {
       };
       if (data.code) output.error = { code: data.code, message: data.message || "" };
       else if (outputData.code) output.error = { code: outputData.code, message: outputData.message || "" };
+      // DashScope reports billable durations in usage (duration plus the
+      // input/output split for Wan3). The host then adds the settled
+      // billable_seconds facts, so retrieve responses match the sora protocol.
+      if (data.usage && typeof data.usage === "object" && !Array.isArray(data.usage)) output.usage = data.usage;
       return output;
     },
   },

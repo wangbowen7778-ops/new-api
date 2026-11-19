@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,9 @@ func SetRouter(router *gin.Engine, assets WebAssets) {
 	SetTaskPluginProtocolRouter(router)
 	SetVideoRouter(router)
 	SetTaskRouter(router)
+	SetMaterialRouter(router)
+	// 站点开发者文档：公开访问，优先于前端兜底路由。
+	router.GET("/developer-docs", middleware.RouteTag("web"), controller.DeveloperDocs)
 	pluginDispatcher := SetPluginRouter(router)
 	frontendBaseUrl := os.Getenv("FRONTEND_BASE_URL")
 	if common.IsMasterNode && frontendBaseUrl != "" {

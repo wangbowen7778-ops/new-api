@@ -508,9 +508,10 @@ func taskMediaRedirectClient(base *http.Client, proxy string, c *gin.Context, cl
 			return fmt.Errorf("%w: proxy loop", errTaskMediaRequestRejected)
 		}
 		if len(via) > 0 && !sameTaskMediaOrigin(via[len(via)-1].URL, req.URL) {
-			if !credentialless {
-				return fmt.Errorf("%w: credentialed cross-origin redirect", errTaskMediaRequestRejected)
-			}
+			// 跨站跳转：上游常把产物 302 到对象存储的签名直链（如腾讯云 COS）。
+			// 这类跳转不能携带网关凭据，但也不该整单拒绝 —— 与 curl 默认行为一致，
+			// 剥掉全部请求头与请求体后继续跟随。安全性由前面的 validateTaskMediaURL
+			// （SSRF / 域名校验）和 10 次跳转上限保证，凭据不会外泄。
 			for name := range req.Header {
 				req.Header.Del(name)
 			}
@@ -518,6 +519,8 @@ func taskMediaRedirectClient(base *http.Client, proxy string, c *gin.Context, cl
 			req.GetBody = nil
 			req.ContentLength = 0
 		}
+		// clientHeaders 只含 Range 与缓存校验头，不含任何凭据，跨站跳转后保留，
+		// 以便视频预览拖动进度条时仍能命中 CDN 的分段响应。
 		for name, value := range clientHeaders {
 			req.Header.Set(name, value)
 		}

@@ -73,7 +73,7 @@ func TestAlibabaWan3(t *testing.T) {
 
 		value, callErr = plugin.Engine.Call(t.Context(), "extractUsage", usageCtx("facts", body))
 		require.NoError(t, callErr)
-		assert.Equal(t, map[string]any{"seconds": float64(30), "resolution": "1080P"}, roundTrip(t, value))
+		assert.Equal(t, map[string]any{"seconds": float64(30), "output_seconds": float64(30), "resolution": "1080P"}, roundTrip(t, value))
 
 		value, callErr = plugin.Engine.Call(t.Context(), "extractUsage", usageCtx("billing_ratios", body))
 		require.NoError(t, callErr)
@@ -145,5 +145,26 @@ func TestAlibabaWan3(t *testing.T) {
 		})
 		require.NoError(t, callErr)
 		assert.Equal(t, map[string]any{"seconds": float64(5), "resolution": "1080P"}, roundTrip(t, value))
+	})
+
+	t.Run("retrieve render exposes the provider usage block", func(t *testing.T) {
+		usage := map[string]any{"video_count": float64(1), "duration": float64(20), "SR": float64(480), "output_video_duration": float64(15), "input_video_duration": float64(5)}
+		value, callErr := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "render"}, map[string]any{}, map[string]any{
+			"task_id": "task_public", "status": "SUCCESS", "progress": "100%", "created_at": 100,
+			"data": map[string]any{
+				"output": map[string]any{"task_id": "upstream", "task_status": "SUCCEEDED", "video_url": "https://upstream.example/v.mp4"},
+				"usage":  usage,
+			},
+		})
+		require.NoError(t, callErr)
+		rendered := roundTrip(t, value)
+		assert.Equal(t, roundTrip(t, usage), rendered["usage"])
+
+		value, callErr = plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "render"}, map[string]any{}, map[string]any{
+			"task_id": "task_public", "status": "IN_PROGRESS", "progress": "50%", "created_at": 100,
+			"data": map[string]any{"output": map[string]any{"task_id": "upstream", "task_status": "RUNNING"}},
+		})
+		require.NoError(t, callErr)
+		assert.NotContains(t, roundTrip(t, value), "usage")
 	})
 }

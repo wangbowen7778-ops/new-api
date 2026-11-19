@@ -710,7 +710,11 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 		}
 		bc.TieredSnapshot.UsageFacts = usageFacts
 		bc.TieredSnapshot.EstimatedTier = result.MatchedTier
-		RecalculateTaskQuota(ctx, task, result.ActualQuotaAfterGroup, common.NewMessage("Settled by the task usage expression"), result.Clamp)
+		RecalculateTaskQuota(ctx, task, result.ActualQuotaAfterGroup, describeTaskUsageSplitMessage(usageFacts), result.Clamp)
+		// 快照已更新为最终计费口径，落库供任务查询响应与对账使用。
+		if err := task.UpdatePrivateData(); err != nil {
+			logger.LogWarn(ctx, common.LogText("task %s failed to persist settled billing snapshot: %v", task.TaskID, err))
+		}
 		return true
 	}
 	// 按次计费的成功任务保持预扣；失败任务由调用方全额退款。
@@ -732,6 +736,23 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 		return RecalculateTaskQuotaByTokens(ctx, task, tokens)
 	}
 	return false
+}
+
+// describeTaskUsageSplitMessage 把用量拆分写进结算日志：传入过参考视频的任务
+// 会明确输出「输出视频 + 输入视频 = 合计」的计费构成，便于对账。
+func describeTaskUsageSplitMessage(usageFacts map[string]any) *common.Message {
+	total, _ := usageFacts["seconds"].(float64)
+	output, _ := usageFacts["output_seconds"].(float64)
+	input, hasInput := usageFacts["input_video_seconds"].(float64)
+	if hasInput && input > 0 && output > 0 {
+		return common.NewMessage("Settled by the task usage expression: output video {{output}}s + input video {{input}}s = {{total}}s",
+			map[string]any{"output": output, "input": input, "total": total})
+	}
+	if output > 0 {
+		return common.NewMessage("Settled by the task usage expression: output video {{output}}s = {{total}}s",
+			map[string]any{"output": output, "total": total})
+	}
+	return common.NewMessage("Settled by the task usage expression")
 }
 
 func classifyPollHTTP(statusCode int) string {

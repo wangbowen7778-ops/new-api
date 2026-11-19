@@ -663,7 +663,7 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 }
 
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
-	return &dto.TaskDto{
+	result := &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
 		UpdatedAt:  task.UpdatedAt,
@@ -685,4 +685,35 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Username:   task.Username,
 		Data:       task.Data,
 	}
+	if snapshot := task.PrivateData.RequestSnapshot; snapshot != nil {
+		request := &dto.TaskRequestInfo{
+			Source:     snapshot.Source,
+			Model:      snapshot.Model,
+			Prompt:     snapshot.Prompt,
+			Parameters: snapshot.Parameters,
+		}
+		for _, media := range snapshot.Media {
+			request.Media = append(request.Media, dto.TaskRequestMediaDto{
+				Type:            media.Type,
+				Kind:            media.Kind,
+				URL:             media.URL,
+				AssetID:         media.AssetID,
+				Filename:        media.Filename,
+				DurationSeconds: media.DurationSeconds,
+				Inline:          media.Inline,
+			})
+		}
+		result.Request = request
+	}
+	if billingContext := task.PrivateData.BillingContext; billingContext != nil {
+		billing := &dto.TaskBillingInfo{PreConsumedQuota: billingContext.PreConsumedQuota}
+		if snapshot := billingContext.TieredSnapshot; snapshot != nil {
+			billing.UsageFacts = snapshot.UsageFacts
+			billing.MatchedTier = snapshot.EstimatedTier
+		}
+		if billing.PreConsumedQuota != 0 || len(billing.UsageFacts) != 0 || billing.MatchedTier != "" {
+			result.Billing = billing
+		}
+	}
+	return result
 }

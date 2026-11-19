@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>开发者文档 · 视频 / 图片 / 音频生成与素材</title>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --ink:#1f2329; --muted:#646a73; --line:#e5e6eb;
+          --code:#f2f3f5; --accent:#2f6bff; --ok:#0a7d43; --warn:#b45309; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 40px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p, li { color: var(--ink); }
+  .sub { color: var(--muted); font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; background: var(--card); }
+  th, td { border: 1px solid var(--line); padding: 7px 12px; text-align: left; font-size: 14px; vertical-align: top; }
+  th { background: #f2f3f5; font-weight: 600; white-space: nowrap; }
+  code { background: var(--code); border-radius: 4px; padding: 1px 6px; font-size: 13px;
+         font-family: ui-monospace,Consolas,"Courier New",monospace; word-break: break-all; }
+  pre { background: var(--code); border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+        font-size: 13px; line-height: 1.6; }
+  pre code { background: none; padding: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px 18px; margin: 14px 0; }
+  .tag { display:inline-block; border-radius: 4px; padding: 0 8px; font-size: 12px; margin-right: 6px; }
+  .tag.ok { background:#e6f4ea; color: var(--ok); }
+  .tag.warn { background:#fef3e2; color: var(--warn); }
+  .toc { columns: 2; column-gap: 32px; font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; display: block; padding: 2px 0; }
+  a { color: var(--accent); }
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+            padding: 8px 14px; margin: 12px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>开发者文档 · 视频 / 图片 / 音频生成与素材</h1>
+  <p class="sub">本站同时支持 OpenAI 兼容接入与 TD 公共协议接入，二者任选其一即可 · 更新于 2026-11-13</p>
+
+  <div class="card">
+    <b>快速开始</b>：SDK 的 Base URL 填 <code>http://39.107.108.35:3000/v1</code>；
+    直接调用则对 <code>http://39.107.108.35:3000</code> 发请求。
+    鉴权统一 <code>Authorization: Bearer sk-…</code>（平台令牌）。
+    两种协议共用 <code>/v1</code>：<b>不带 TD 协议头</b>的媒体请求按 OpenAI 处理；
+    携带 <code>X-TD-Contract</code> 的按 TD 协议处理。
+  </div>
+
+  <h2 id="toc">目录</h2>
+  <div class="toc">
+    <a href="#protocols">1. 双协议接入对比</a>
+    <a href="#ops">2. 接口总览</a>
+    <a href="#openai">3. 方式一 · OpenAI 兼容接入</a>
+    <a href="#td">4. 方式二 · TD 公共协议接入</a>
+    <a href="#params-prime">5. 模型参数 · wan3.0-video-prime</a>
+    <a href="#params-video">6. 模型参数 · wan3.0-video</a>
+    <a href="#params-single">7. 模型参数 · wan3-single（共享车）</a>
+    <a href="#fleet-media">8. 素材上传 /v1/fleet/media</a>
+    <a href="#ref-media">9. 引用上传素材 parameters.media</a>
+    <a href="#asset">10. 人物资产 /v1/materials</a>
+    <a href="#query">11. 查询任务（单条 / 批量）</a>
+    <a href="#tasks">12. 统一任务接口 /v1/tasks</a>
+    <a href="#download">13. 下载视频</a>
+    <a href="#billing">14. 计费规则</a>
+    <a href="#errors">15. 错误处理与错误码</a>
+    <a href="#tips">16. 注意事项</a>
+  </div>
+
+  <h2 id="protocols">1. 双协议接入对比</h2>
+  <p>本站同时支持 <b>OpenAI 兼容接入</b>和 <b>TD 公共协议接入</b>，可根据现有客户端任选其一，无需同时接入。两种方式使用相同的平台 API Key，沿用账号的模型权限、分组与额度；选择协议不会扩大模型权限，也不代表每个模型都支持相同的参数、素材或操作——具体以各模型参数页为准。</p>
+  <table>
+    <tr><th>对比项</th><th>OpenAI 兼容接口</th><th>TD 公共协议</th></tr>
+    <tr><td>适合场景</td><td>支持 OpenAI 媒体接口的 SDK、应用和 HTTP 客户端</td><td>直接使用 TD 参数、模型能力目录与统一任务管理的应用</td></tr>
+    <tr><td>SDK Base URL</td><td><code>http://39.107.108.35:3000/v1</code></td><td><code>http://39.107.108.35:3000/v1</code></td></tr>
+    <tr><td>鉴权</td><td colspan="2"><code>Authorization: Bearer &lt;API_KEY&gt;</code></td></tr>
+    <tr><td>协议请求头</td><td>不携带 <code>X-TD-Contract</code></td><td>按模态携带，视频为 <code>X-TD-Contract: td.video.v1</code></td></tr>
+    <tr><td>模型目录</td><td><code>GET /models</code></td><td><code>GET /catalog/models</code>（也保留 <code>GET /models</code>）</td></tr>
+    <tr><td>视频创建</td><td><code>POST /videos</code>，使用 <code>seconds/size/input_reference</code> 等兼容字段</td><td><code>POST /videos</code>，使用 <code>duration/ratio/resolution/input.media/parameters</code> 等 TD 字段</td></tr>
+    <tr><td>视频状态</td><td><code>/videos/{id}</code> 的 <code>queued/in_progress/completed/failed</code></td><td>可用相同视频查询；统一 <code>/tasks/{id}</code> 使用 <code>queued/processing/succeeded/failed/unknown/cancelled</code></td></tr>
+  </table>
+  <ul>
+    <li>自动追加 <code>/v1</code> 的渠道配置只填网关域名；SDK 则使用完整的 <code>/v1</code> Base URL，不要重复拼接</li>
+    <li>每种请求使用对应的请求头、参数与结果解析，<b>不能只切换请求头就假设请求体和任务状态完全相同</b></li>
+    <li>重试保持原协议、路径、请求键和参数；切换协议复用原请求键可能返回幂等冲突，此时应先查询原任务，不要换键重投</li>
+  </ul>
+
+  <h2 id="ops">2. 接口总览</h2>
+  <table>
+    <tr><th>操作</th><th>接口</th><th>说明</th></tr>
+    <tr><td>查看模型</td><td><code>GET /v1/models/{model}</code></td><td>需有对应模型权限</td></tr>
+    <tr><td>模型能力清单</td><td><code>GET /v1/catalog/models</code></td><td>模型列表、参数范围与 <code>x_td</code> 能力标记</td></tr>
+    <tr><td>共享车报价</td><td><code>GET /v1/fleet/catalog</code></td><td>共享车车型与价格（<code>fleet-shared.task_prices</code>）</td></tr>
+    <tr><td>提交视频任务</td><td><code>POST /v1/videos</code></td><td>两种参数风格见各模型参数页</td></tr>
+    <tr><td>查询单任务</td><td><code>GET /v1/videos/{id}</code></td><td>保留提交返回的完整任务 ID</td></tr>
+    <tr><td>批量查询</td><td><code>POST /v1/fleet/videos/query</code></td><td>只读，1–200 个 ID，正文 ≤16 KiB</td></tr>
+    <tr><td>下载视频</td><td><code>GET /v1/videos/{id}/content</code></td><td>支持 HEAD 与 Range 断点续传</td></tr>
+    <tr><td>上传素材</td><td><code>POST /v1/fleet/media</code></td><td>multipart，type=shared</td></tr>
+    <tr><td>人物资产</td><td><code>POST /v1/materials</code></td><td>图片人物资产（见第 10 节）</td></tr>
+    <tr><td>统一任务查询</td><td><code>GET /v1/tasks/{id}</code> 与 <code>GET /v1/tasks/{id}/artifacts</code></td><td>任务状态与产物列表</td></tr>
+  </table>
+
+  <h2 id="openai">3. 方式一 · OpenAI 兼容接入</h2>
+  <p>已在用支持 OpenAI 媒体接口的 SDK 或应用时选这种方式。<b>不携带 <code>X-TD-Contract</code></b>。</p>
+  <pre><code>export BASE_URL='http://39.107.108.35:3000'
+export OPENAI_BASE_URL="$BASE_URL/v1"
+export API_KEY='替换为你的平台令牌'
+
+# 查看模型目录
+curl --fail-with-body "$OPENAI_BASE_URL/models" -H "Authorization: Bearer $API_KEY"</code></pre>
+
+  <h3>视频创建、查询与下载</h3>
+  <pre><code>curl --fail-with-body "$OPENAI_BASE_URL/videos" \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Idempotency-Key: 生成一个UUID，重试时复用" \
+  -H "Content-Type: application/json" \
+  --data-raw '{
+    "model": "wan3.0-video",
+    "prompt": "海边日落，镜头缓慢向前推进",
+    "seconds": "2",
+    "size": "1280x720"
+  }'</code></pre>
+  <p>保存响应中的原始 <code>id</code>，每隔数秒查询一次并遵守 <code>Retry-After</code>。
+  只在 <code>status=completed</code> 后下载；<code>failed</code> 时停止并读取 <code>error</code>。
+  客户端超时后保留任务 ID，不要自动重新创建。</p>
+  <pre><code>curl --fail-with-body "$OPENAI_BASE_URL/videos/$VIDEO_ID" -H "Authorization: Bearer $API_KEY"
+
+# 只在 status=completed 后执行
+curl --fail-with-body --location "$OPENAI_BASE_URL/videos/$VIDEO_ID/content" \
+  -H "Authorization: Bearer $API_KEY" --output video.mp4</code></pre>
+  <ul>
+    <li>下载可能返回媒体或 302；<b>跨站重定向不得转发网关 Key／Cookie</b>（curl 默认即凭据隔离，不要用 <code>--location-trusted</code>）</li>
+    <li>签名直链模式 HEAD 返回 405／<code>Allow: GET</code>，应使用 GET；这不表示生成失败</li>
+    <li>视频取件不能依赖任务 JSON 一定有顶层 <code>video_url</code></li>
+  </ul>
+  <div class="card">各模型的 OpenAI 风格字段支持度不同：<b>请以具体模型参数页为准</b>，不要把某个模型的示例照搬到另一个模型。</div>
+
+  <h2 id="td">4. 方式二 · TD 公共协议接入</h2>
+  <h3>调用前确认三件事</h3>
+  <ol>
+    <li><b>模型 ID</b>：请求中的 <code>model</code> 必须与模型页一致，保留大小写和空格</li>
+    <li><b>生成模式与素材</b>：确认是否支持你需要的模式，以及素材格式与数量限制</li>
+    <li><b>必填参数与结果方式</b>：使用该模型自己的参数和示例，确认是直接返回结果还是返回任务 ID</li>
+  </ol>
+  <pre><code>export BASE_URL='http://39.107.108.35:3000'
+export API_KEY='替换为你的平台令牌'
+
+# 查询当前令牌实际可用的模型目录
+curl --fail-with-body "$BASE_URL/v1/catalog/models" -H "Authorization: Bearer $API_KEY"</code></pre>
+  <p>目录中 <code>data[].x_td</code> 附带能力元数据：<code>contract_id</code>（公共协议）、<code>parameters</code>（字段类型、必填项、默认值和取值范围）、<code>inputs</code> / <code>reference_media</code> / <code>media_constraints</code>（素材传输方式与限制）、<code>async</code> 与 <code>result</code>（结果约定）。模型页面展示公开能力，Key 目录展示个人实际可用能力；有差异时以 Key 目录为准。</p>
+
+  <h3>TD 视频接口 · 公共字段</h3>
+  <p><code>POST /v1/videos</code>，携带 <code>X-TD-Contract: td.video.v1</code>。视频按异步任务处理，创建后保存响应中的 <code>id</code>。</p>
+  <table>
+    <tr><th>字段</th><th>含义</th><th>使用规则</th></tr>
+    <tr><td><code>model</code></td><td>对外模型 ID</td><td>必填，选择 <code>td.video.v1</code> 模型</td></tr>
+    <tr><td><code>prompt</code></td><td>内容、动作与镜头描述</td><td>必填条件以模型为准</td></tr>
+    <tr><td><code>mode</code></td><td>生成模式</td><td>只使用模型公布的模式</td></tr>
+    <tr><td><code>duration</code></td><td>输出时长（秒）</td><td>类型与范围以模型为准；部分模型保留 <code>-1</code>（自动时长）</td></tr>
+    <tr><td><code>resolution</code></td><td>分辨率档位</td><td>按模型目录填写，不可跨模型照搬</td></tr>
+    <tr><td><code>ratio</code></td><td>画面比例</td><td>固定比例或自适应的支持范围由模型决定</td></tr>
+    <tr><td><code>input.media</code></td><td>素材数组</td><td>每项使用 <code>type</code> 与 <code>url</code></td></tr>
+    <tr><td><code>parameters</code></td><td>模型扩展参数</td><td>只放当前模型声明的扩展字段</td></tr>
+  </table>
+  <p><b>素材角色：</b></p>
+  <table>
+    <tr><th>模式</th><th>典型素材配置</th></tr>
+    <tr><td><code>text_to_video</code></td><td>仅提示词，无素材</td></tr>
+    <tr><td><code>image_to_video</code></td><td><code>first_frame</code>，具体附加素材按模型要求</td></tr>
+    <tr><td><code>first_last_frame</code></td><td><code>first_frame</code> 与 <code>last_frame</code></td></tr>
+    <tr><td><code>multi_ref</code></td><td>模型允许的 <code>reference_image</code>、<code>reference_video</code>、<code>reference_audio</code> 等角色</td></tr>
+  </table>
+  <pre><code>{
+  "input": {
+    "media": [
+      { "type": "first_frame", "url": "https://example.com/start.png" },
+      { "type": "last_frame", "url": "https://example.com/end.png" }
+    ]
+  }
+}</code></pre>
+  <ul>
+    <li>素材数量、大小、时长、允许角色及混用条件必须满足所选模型限制；素材 URL 的有效期应覆盖生成时间</li>
+    <li>扩展字段放在 <code>parameters</code> 中，使用当前目录给出的字段名；目录没有声明的字段不要自动补入，不使用的可选字段直接省略，不传 <code>null</code>；显式 <code>0</code>、<code>false</code> 与省略字段含义不同</li>
+    <li>自动时长可能影响预扣额度，价格及结算规则以控制台和模型说明为准</li>
+  </ul>
+  <h3>TD 图片与音频</h3>
+  <ul>
+    <li>图片：<code>POST /v1/images/generations</code>（文生图）与 <code>POST /v1/images/edits</code>（参考图编辑），携带 <code>X-TD-Contract: td.image.v1</code>；同步响应读取 <code>data[].url</code> 或 <code>data[].b64_json</code></li>
+    <li>音频：<code>POST /v1/audio/speech</code>，携带 <code>X-TD-Contract: td.audio.v1</code>，使用模型支持的 <code>input/voice/response_format/speed</code>，成功响应为音频字节</li>
+  </ul>
+
+  <h2 id="params-prime">5. 模型参数 · wan3.0-video-prime</h2>
+  <p>TD 协议 <code>POST /v1/videos</code> 的请求参数（OpenAI 风格字段请见第 3 节，两种风格不要混用）。</p>
+  <table>
+    <tr><th>字段</th><th>类型</th><th>规则</th></tr>
+    <tr><td><code>model</code></td><td>string</td><td>必填，固定 <code>wan3.0-video-prime</code></td></tr>
+    <tr><td><code>prompt</code></td><td>string</td><td>可选（与素材至少提供一项），1–20,000 字符</td></tr>
+    <tr><td><code>duration</code></td><td>integer</td><td>可选，默认 <code>10</code>，范围 2–30 秒；按分辨率有不同的可用时长：<code>480P</code> 支持 2–30 秒、<code>720P</code> 仅支持 10 秒、<code>1080P</code> 支持 8 或 10 秒；短于支持时长会返回 <code>video_output_duration_unsupported</code></td></tr>
+    <tr><td><code>resolution</code></td><td>string</td><td><b>必填，大写</b>：<code>480P</code>、<code>720P</code>、<code>1080P</code>（不支持 adaptive 与自动时长）</td></tr>
+    <tr><td><code>ratio</code></td><td>string</td><td>可选，默认 <code>16:9</code>；允许 <code>16:9</code>、<code>1:1</code>、<code>21:9</code>、<code>3:4</code>、<code>4:3</code>、<code>9:16</code>（不支持 adaptive）</td></tr>
+    <tr><td><code>mode</code></td><td>string</td><td><code>first_last_frame</code> / <code>image_to_video</code> / <code>multi_ref</code> / <code>text_to_video</code>，素材要求见下表</td></tr>
+    <tr><td><code>input.media</code></td><td>array&lt;object&gt;</td><td>可选，最多 20 项；见下表类型与数量限制</td></tr>
+    <tr><td><code>parameters</code></td><td>object</td><td>可选，但 <b>固定为空对象</b>（不接受附加字段）</td></tr>
+  </table>
+  <p><b>mode 与素材要求：</b></p>
+  <table>
+    <tr><th>mode</th><th>素材要求</th></tr>
+    <tr><td><code>text_to_video</code></td><td>填写提示词，不传素材</td></tr>
+    <tr><td><code>image_to_video</code></td><td>一张首帧图片</td></tr>
+    <tr><td><code>first_last_frame</code></td><td>首帧、尾帧各一张图片</td></tr>
+    <tr><td><code>multi_ref</code></td><td>至少一份参考素材，不传首尾帧</td></tr>
+  </table>
+  <p><b>input.media 类型与数量上限：</b></p>
+  <table>
+    <tr><th>type</th><th>数量上限</th><th>说明</th></tr>
+    <tr><td><code>first_frame</code></td><td>1</td><td>首帧图片（需与尾帧成对使用）</td></tr>
+    <tr><td><code>last_frame</code></td><td>1</td><td>尾帧图片</td></tr>
+    <tr><td><code>reference_image</code></td><td>10</td><td>参考图片</td></tr>
+    <tr><td><code>reference_video</code></td><td>5</td><td>参考视频（单段 1–15 秒，合计 ≤15 秒，需平台可确定时长）</td></tr>
+    <tr><td><code>reference_audio</code></td><td>5</td><td>参考音频（单段 1–15 秒，合计 ≤15 秒，需平台可确定时长）</td></tr>
+    <tr><td><code>file</code></td><td>1</td><td>文件；与 <code>link</code> 互斥且共用上限，需 <code>parameters.prompt_extend=true</code></td></tr>
+    <tr><td><code>link</code></td><td>1</td><td>网页链接；与 <code>file</code> 互斥且共用上限，需 <code>parameters.prompt_extend=true</code></td></tr>
+  </table>
+  <ul>
+    <li>每项必填 <code>type</code> 与 <code>url</code>；URL 需无需登录即可访问，音视频素材须能被平台确定时长</li>
+    <li>首尾帧不能与参考素材混用，尾帧不能单独使用；按请求中参考图片的顺序编写 <code>@参考图N</code>，无需自行重排</li>
+    <li>数字和布尔值使用 JSON 原生类型（<code>0</code>、<code>false</code>），不要写成字符串</li>
+  </ul>
+
+  <h2 id="params-video">6. 模型参数 · wan3.0-video</h2>
+  <p>TD 协议 <code>POST /v1/videos</code> 的请求参数。</p>
+  <table>
+    <tr><th>字段</th><th>类型</th><th>规则</th></tr>
+    <tr><td><code>model</code></td><td>string</td><td>必填，固定 <code>wan3.0-video</code></td></tr>
+    <tr><td><code>prompt</code></td><td>string</td><td>可选，1–20,000 字符</td></tr>
+    <tr><td><code>duration</code></td><td>integer</td><td>可选，默认 <code>5</code>，范围 2–30 秒；支持 <code>-1</code>（自动时长，可能影响预扣额度）</td></tr>
+    <tr><td><code>resolution</code></td><td>string</td><td><b>必填，大写</b>：<code>480P</code>、<code>720P</code>、<code>1080P</code></td></tr>
+    <tr><td><code>ratio</code></td><td>string</td><td>可选，默认 <code>adaptive</code>；允许 <code>16:9</code>、<code>1:1</code>、<code>21:9</code>、<code>3:4</code>、<code>4:3</code>、<code>9:16</code>、<code>adaptive</code></td></tr>
+    <tr><td><code>mode</code></td><td>string</td><td>可选，<code>first_last_frame</code> / <code>image_to_video</code> / <code>multi_ref</code> / <code>text_to_video</code>，素材要求见下表</td></tr>
+    <tr><td><code>input</code></td><td>object</td><td>可选；文件参考使用 <code>multi_ref</code>：<code>type</code> 填 <code>file</code> 或 <code>link</code> 并提供 URL。<b>file 与 link 不能混用</b>，共用文件数量上限，且必须设置 <code>parameters.prompt_extend=true</code></td></tr>
+    <tr><td><code>input.media</code></td><td>array&lt;object&gt;</td><td>可选，全部素材合计最多 20 项；每项必填 <code>type</code> 与 <code>url</code>，类型与数量上限见下表</td></tr>
+    <tr><td><code>parameters</code></td><td>object</td><td>可选，<b>不接受额外字段</b>；支持的子字段见下表</td></tr>
+    <tr><td><code>parameters.audio</code></td><td>boolean</td><td>可选，默认 <code>true</code>，是否生成声音</td></tr>
+    <tr><td><code>parameters.prompt_extend</code></td><td>boolean</td><td>可选，默认 <code>true</code>，提示词扩展开关</td></tr>
+    <tr><td><code>parameters.seed</code></td><td>integer</td><td>可选，默认 <code>-1</code>（随机），范围 -1 ～ 2147483647</td></tr>
+    <tr><td><code>parameters.watermark</code></td><td>boolean</td><td>可选，默认 <code>false</code>，是否加水印</td></tr>
+  </table>
+  <p><b>mode 与素材要求：</b></p>
+  <table>
+    <tr><th>mode</th><th>素材要求</th></tr>
+    <tr><td><code>text_to_video</code></td><td>填写提示词，不传素材</td></tr>
+    <tr><td><code>image_to_video</code></td><td>一张首帧图片</td></tr>
+    <tr><td><code>first_last_frame</code></td><td>首帧、尾帧各一张图片</td></tr>
+    <tr><td><code>multi_ref</code></td><td>至少一份参考素材（<code>reference_image</code> / <code>reference_video</code> / <code>reference_audio</code> / <code>file</code> / <code>link</code>），不传首尾帧</td></tr>
+  </table>
+  <p><b>input.media 类型与数量上限：</b></p>
+  <table>
+    <tr><th>type</th><th>数量上限</th><th>说明</th></tr>
+    <tr><td><code>first_frame</code></td><td>1</td><td>首帧图片（需与尾帧成对使用）</td></tr>
+    <tr><td><code>last_frame</code></td><td>1</td><td>尾帧图片</td></tr>
+    <tr><td><code>reference_image</code></td><td>10</td><td>参考图片</td></tr>
+    <tr><td><code>reference_video</code></td><td>5</td><td>参考视频（单段 1–15 秒，合计 ≤15 秒，需平台可确定时长）</td></tr>
+    <tr><td><code>reference_audio</code></td><td>5</td><td>参考音频（单段 1–15 秒，合计 ≤15 秒，需平台可确定时长）</td></tr>
+    <tr><td><code>file</code></td><td>1</td><td>文件；与 <code>link</code> 互斥且共用上限，需 <code>parameters.prompt_extend=true</code></td></tr>
+    <tr><td><code>link</code></td><td>1</td><td>网页链接；与 <code>file</code> 互斥且共用上限，需 <code>parameters.prompt_extend=true</code></td></tr>
+  </table>
+  <ul>
+    <li>支持 <code>ratio: adaptive</code> 自适应比例（wan3.0-video 系列中唯一支持 adaptive 的模型之一）</li>
+    <li>参考视频／音频平台无法确定时长时会拒绝，建议使用可直接下载的公开直链</li>
+    <li>数字和布尔值使用 JSON 原生类型（<code>0</code>、<code>false</code>），不要写成字符串</li>
+  </ul>
+
+  <h2 id="params-single">7. 模型参数 · wan3-single（共享车）</h2>
+  <p><code>wan3-single</code> 与 <code>fleet-shared</code> 是同一共享服务的两个名称，使用相同的分组权限、报价、扣费与队列；已有 <code>fleet-shared</code> 权限的令牌可直接使用 <code>wan3-single</code>。</p>
+  <p><b>查询报价</b>：<code>GET /v1/fleet/catalog</code>，共享车每条价格取 <code>fleet-shared.task_prices</code> 中对应的 <code>480P</code>、<code>720P</code>、<code>1080P</code> 价格。即使使用 <code>wan3-single</code> 提交，也从目录的 <code>fleet-shared</code> 条目取价。</p>
+  <table>
+    <tr><th>字段</th><th>类型</th><th>规则</th></tr>
+    <tr><td><code>model</code></td><td>string</td><td>必填，<code>wan3-single</code> 或 <code>fleet-shared</code></td></tr>
+    <tr><td><code>prompt</code></td><td>string</td><td>提示词与素材至少提供一项；最多 20,000 字符 / 65,535 字节</td></tr>
+    <tr><td><code>duration</code></td><td>integer</td><td>可选，默认 <code>5</code>，范围 2–30 秒</td></tr>
+    <tr><td><code>resolution</code></td><td>string</td><td>可选，默认 <code>480P</code>；允许 <code>480P</code>、<code>720P</code>、<code>1080P</code></td></tr>
+    <tr><td><code>ratio</code></td><td>string</td><td>可选，默认 <code>adaptive</code>；允许 <code>adaptive</code>、<code>16:9</code>、<code>9:16</code>、<code>1:1</code>、<code>4:3</code>、<code>3:4</code>、<code>21:9</code></td></tr>
+    <tr><td><code>mode</code></td><td>string</td><td>生成模式，省略时按素材角色处理，见下表</td></tr>
+    <tr><td><code>input.media</code></td><td>array&lt;object&gt;</td><td>可选，最多 10 项；仅支持 <code>reference_image</code> / <code>first_frame</code> / <code>last_frame</code> 三种图片类型（<code>first_frame</code>、<code>last_frame</code> 各 ≤1）</td></tr>
+    <tr><td><code>parameters.id</code></td><td>string</td><td>TD 请求必填，每条任务一个 UUID；任务 ID 为 <code>fleet_</code> 加该 UUID</td></tr>
+    <tr><td><code>parameters.expected_price</code></td><td>string</td><td>TD 请求必填，从 <code>GET /v1/fleet/catalog</code> 读取对应分辨率的人民币价格字符串原样填入</td></tr>
+    <tr><td><code>parameters.audio</code></td><td>boolean</td><td>可选，是否生成声音</td></tr>
+    <tr><td><code>parameters.prompt_extend</code></td><td>boolean</td><td>可选，提示词扩展开关</td></tr>
+  </table>
+  <p><b>mode 与素材要求：</b></p>
+  <table>
+    <tr><th>mode</th><th>素材要求</th></tr>
+    <tr><td><code>text_to_video</code></td><td>填写提示词，不传素材</td></tr>
+    <tr><td><code>image_to_video</code></td><td>一张首帧图片</td></tr>
+    <tr><td><code>first_last_frame</code></td><td>首帧、尾帧各一张图片</td></tr>
+    <tr><td><code>multi_ref</code></td><td>至少一份参考图片，不传首尾帧</td></tr>
+  </table>
+  <ul>
+    <li>TD 请求示例：<code>{"model":"wan3-single","prompt":"…","mode":"text_to_video","duration":5,"resolution":"480p","ratio":"16:9","parameters":{"id":"UUID","expected_price":"目录中的480P价格"}}</code></li>
+    <li>OpenAI 请求示例：<code>{"model":"wan3-single","prompt":"…","seconds":"5","size":"1280x720"}</code>（报价由服务端按当前报价计算）</li>
+    <li>每个新任务生成新的 UUID 填入 <code>parameters.id</code>；网络异常时先查询原任务，重试使用相同 UUID 和参数，不要换 ID 重投</li>
+    <li>共享车输入视频／音频数量为 0（不支持）；文件与网页需 <code>parameters.prompt_extend=true</code> 的模型才可用</li>
+  </ul>
+
+  <h2 id="fleet-media">8. 素材上传 /v1/fleet/media</h2>
+  <pre><code>curl --fail-with-body "$BASE_URL/v1/fleet/media" \
+  -H "Authorization: Bearer $API_KEY" \
+  -F 'type=shared' \
+  -F 'kind=image' \
+  -F 'token=图片1' \
+  -F 'file=@./reference.png'</code></pre>
+  <table>
+    <tr><th>字段</th><th>必填</th><th>说明</th></tr>
+    <tr><td><code>type</code></td><td>是</td><td>固定 <code>shared</code></td></tr>
+    <tr><td><code>kind</code></td><td>是</td><td><code>image</code> / <code>video</code> / <code>audio</code> / <code>file</code></td></tr>
+    <tr><td><code>token</code></td><td>建议</td><td>素材短名 ≤20 字符，提示词引用与 <code>parameters.media</code> 都要用它</td></tr>
+    <tr><td><code>file</code></td><td>是</td><td>见下表</td></tr>
+  </table>
+  <table>
+    <tr><th>kind</th><th>格式</th><th>大小上限</th></tr>
+    <tr><td><code>image</code></td><td>PNG、JPEG、WebP、BMP</td><td>20 MB</td></tr>
+    <tr><td><code>video</code></td><td>MP4、MOV</td><td>100 MB</td></tr>
+    <tr><td><code>audio</code></td><td>MP3、WAV</td><td>15 MB</td></tr>
+    <tr><td><code>file</code></td><td>文件</td><td>20 MB</td></tr>
+  </table>
+  <p>上传返回 <code>{ "id": "…", "kind": "image", "object": "fleet_media", "seconds": null, "token": "图片1" }</code>；
+  音视频保留返回的 <code>seconds</code>。同 <code>token</code> 重复上传会生成新 id。
+  请求超时或结果未确定时不要重复上传，保留请求信息交由平台核对。</p>
+
+  <h2 id="ref-media">9. 引用上传素材 parameters.media</h2>
+  <p><span class="tag warn">仅共享车模型（wan3-single / fleet-shared）</span>
+  <code>wan3.0-video-prime</code> / <code>wan3.0-video</code> 的素材一律通过 <code>input.media</code> 传 URL 引用（见第 5、6 节）。
+  把上传返回值放入提交请求的 <code>parameters.media</code>，并增加素材用途 <code>role</code>：</p>
+  <pre><code>{
+  "parameters": {
+    "media": [
+      { "id": "替换为上传返回的素材ID", "kind": "image", "token": "图片1", "role": "ref" }
+    ]
+  }
+}</code></pre>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td><code>id</code></td><td>上传返回的素材 ID</td></tr>
+    <tr><td><code>kind</code></td><td><code>image</code> / <code>video</code> / <code>audio</code> / <code>file</code></td></tr>
+    <tr><td><code>token</code></td><td>素材短名，提示词用 <code>@token</code> 引用</td></tr>
+    <tr><td><code>role</code></td><td><code>ref</code> 参考 / <code>first</code> 首帧 / <code>last</code> 尾帧</td></tr>
+  </table>
+  <p><b>素材配额</b>：每条任务最多 20 份——图片 ≤10、视频 ≤5、音频 ≤5、文件与网页合计 ≤1；
+  音视频单段 1–15 秒、各自总时长 ≤15 秒；参考视频与成片合计 ≤30 秒。
+  <b>共享车素材只能由上传它的令牌使用</b>；跨渠道引用会被网关拦截（<code>material_channel_mismatch</code>）。</p>
+
+  <h2 id="asset">10. 人物资产 /v1/materials</h2>
+  <p>接入流程：上传人物图片 → 查询资产审核 → 引用资产生成视频 → 查询视频结果。
+  人物资产生成能力需在平台侧为对应模型开通（<code>catalog</code> 中带人物资产标记的模型）后方可使用。</p>
+  <pre><code># 上传（multipart，仅图片，≤30 MiB）
+curl --fail-with-body "$BASE_URL/v1/materials" \
+  -H "Authorization: Bearer $API_KEY" \
+  -F "model=$MODEL" -F 'material_type=virtual' -F 'file=@./person.png'
+
+# 已有图片链接时用 JSON 形态
+curl --fail-with-body "$BASE_URL/v1/materials" \
+  -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"$MODEL","source_url":"https://…/person.png","material_type":"virtual"}'</code></pre>
+  <table>
+    <tr><th>字段</th><th>必填</th><th>说明</th></tr>
+    <tr><td><code>model</code></td><td>是</td><td>已开通人物资产能力的平台模型名</td></tr>
+    <tr><td><code>file</code> / <code>source_url</code></td><td>是</td><td>二选一：multipart 文件，或可直接读取的 HTTP(S) 图片 URL</td></tr>
+    <tr><td><code>material_type</code></td><td>否</td><td><code>virtual</code>（默认）/ <code>real</code></td></tr>
+  </table>
+  <p>上传成功返回 <code>{"id":"material.asset.…","object":"material","model":"…","status":"processing"}</code>，保存完整 <code>id</code> 作为资产标识。
+  请求超时或结果未确定时不自动重新上传，有资产 ID 时继续查询原资产。</p>
+  <pre><code>curl --fail-with-body --get "$BASE_URL/v1/materials/$MATERIAL_ID" \
+  -H "Authorization: Bearer $API_KEY" --data-urlencode "model=$MODEL"</code></pre>
+  <table>
+    <tr><th>status</th><th>处理</th></tr>
+    <tr><td><code>processing</code></td><td>继续查询，不重复上传</td></tr>
+    <tr><td><code>ready</code></td><td>可以提交目标模型的视频生成</td></tr>
+    <tr><td><code>failed</code></td><td>停止等待，读取 <code>error_code</code></td></tr>
+    <tr><td><code>unknown</code></td><td>保留资产 ID，继续核查，不当作成功或重新入库</td></tr>
+  </table>
+  <p>审核通过后引用资产生成：</p>
+  <pre><code>{
+  "model": "wan3.0-video-prime",
+  "prompt": "让@参考图1中的人物转身向镜头微笑，保持人物外貌一致",
+  "mode": "image_to_video",
+  "duration": 4,
+  "resolution": "480P",
+  "ratio": "16:9",
+  "input": { "media": [ { "type": "reference_image", "asset_id": "material.asset.…" } ] }
+}</code></pre>
+  <ul>
+    <li>单张人物图用 <code>mode: "image_to_video"</code>；人物与普通场景图混用用 <code>multi_ref</code></li>
+    <li>每项媒体只填 <code>url</code> 或 <code>asset_id</code> 之一；按参考图片顺序编写 <code>@参考图N</code></li>
+    <li>多个人物资产应由同一调用身份、兼容模型创建；平台会校验资产组合</li>
+  </ul>
+
+  <h2 id="query">11. 查询任务（单条 / 批量）</h2>
+  <h3>单任务查询</h3>
+  <pre><code>curl --fail-with-body "$BASE_URL/v1/videos/$VIDEO_ID" \
+  -H "Authorization: Bearer $API_KEY"</code></pre>
+  <p>返回任务对象（<code>status</code> / <code>progress</code> / <code>poll_after_seconds</code> / <code>polling_url</code>）。
+  提交与查询返回的任务对象结构相同，请按完整 <code>id</code> 跟踪任务。</p>
+  <table>
+    <tr><th>status</th><th>处理</th></tr>
+    <tr><td><code>queued</code></td><td>排队中，按轮询建议查询</td></tr>
+    <tr><td><code>in_progress</code></td><td>处理中，按建议间隔查询</td></tr>
+    <tr><td><code>completed</code></td><td>停止轮询，下载视频</td></tr>
+    <tr><td><code>failed</code></td><td>停止轮询，读取 <code>error</code>、<code>refunded</code> 与账单</td></tr>
+    <tr><td><code>unknown</code></td><td>保留原任务 ID 继续查询或联系平台，不要换 ID 重投</td></tr>
+  </table>
+
+  <h3>批量查询</h3>
+  <pre><code>curl --fail-with-body "$BASE_URL/v1/fleet/videos/query" \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "shared", "ids": ["fleet_…", "fleet_…"]}'</code></pre>
+  <table>
+    <tr><th>字段</th><th>类型</th><th>规则</th></tr>
+    <tr><td><code>type</code></td><td>string</td><td>必填，共享车模型传 <code>shared</code></td></tr>
+    <tr><td><code>ids</code></td><td>string[]</td><td>必填，1–200 个完整任务 ID，正文 ≤16 KiB，重复 ID 自动去重</td></tr>
+  </table>
+  <p>响应包含 <code>object</code>、<code>data</code>、<code>not_found_ids</code>、<code>poll_after_seconds</code>。
+  <code>not_found_ids</code> 表示不存在、非当前用户或车型不符，<b>不代表任务失败或已退款</b>，不要据此换 ID 重建任务。
+  此接口只读：不创建任务、不触发生成或计费。
+  <code>task_…</code> 等其他视频模型的 ID 继续使用对应任务接口。</p>
+
+  <h3>轮询建议</h3>
+  <table>
+    <tr><th>字段</th><th>含义</th></tr>
+    <tr><td><code>poll_after_seconds</code></td><td>建议等待秒数；<code>0</code> 表示停止该对象的状态轮询</td></tr>
+    <tr><td><code>polling_url</code></td><td>建议查询的相对路径（需鉴权）；终态任务不返回</td></tr>
+  </table>
+  <ul>
+    <li>生成中建议 15 秒一次；非零间隔的查询响应带 <code>Retry-After</code>，收到 429 先按该头等待</li>
+    <li>目录、单任务查询、批量查询和下载<b>每 60 秒合计最多 3000 次</b>（同一用户多 Key/IP 共享额度），一次批量查询只计一次</li>
+  </ul>
+
+  <h2 id="tasks">12. 统一任务接口 /v1/tasks</h2>
+  <p>视频与异步任务也可通过统一任务接口查询：</p>
+  <pre><code>curl --fail-with-body "$BASE_URL/v1/tasks/$TASK_ID" -H "Authorization: Bearer $API_KEY"
+
+# 成功后获取产物列表
+curl --fail-with-body "$BASE_URL/v1/tasks/$TASK_ID/artifacts" -H "Authorization: Bearer $API_KEY"</code></pre>
+  <p>读取 <code>artifacts[].content_url</code> 获取结果（历史任务可能通过 <code>legacy_content_url</code> 提供）。
+  按返回链接获取文件，同站点受保护下载入口携带鉴权；<b>不要把 API Key 发给任意第三方素材地址</b>。文件响应不按 JSON 解析。</p>
+  <table>
+    <tr><th>status</th><th>下一步</th></tr>
+    <tr><td><code>queued</code></td><td>等待后继续查询同一任务</td></tr>
+    <tr><td><code>processing</code></td><td>等待后继续查询同一任务</td></tr>
+    <tr><td><code>succeeded</code></td><td>停止状态轮询，获取文件列表并下载</td></tr>
+    <tr><td><code>failed</code></td><td>停止轮询，检查错误信息后再决定是否重新生成</td></tr>
+    <tr><td><code>cancelled</code></td><td>停止轮询</td></tr>
+    <tr><td><code>unknown</code></td><td>保留任务 ID，稍后查询或联系支持，不直接重新生成</td></tr>
+  </table>
+  <p>视频兼容接口 <code>GET /v1/videos/{id}</code> 使用的 <code>in_progress</code>、<code>completed</code> 分别对应处理中、成功。
+  不要混用两套状态判断，也不要仅凭 HTTP 200 或进度数值判断完成。
+  建议从每 5 秒查询一次开始，遵守服务端限流与 <code>Retry-After</code>，并为轮询设置等待上限；达到上限时保留任务 ID，不要自动重新创建任务。</p>
+
+  <h2 id="download">13. 下载视频</h2>
+  <pre><code>curl --fail-with-body --location \
+  "$BASE_URL/v1/videos/$VIDEO_ID/content" \
+  -H "Authorization: Bearer $API_KEY" \
+  --output result.mp4</code></pre>
+  <table>
+    <tr><th>状态码</th><th>含义</th></tr>
+    <tr><td>200</td><td>视频字节，保存为文件</td></tr>
+    <tr><td>202</td><td>归档准备中，按响应的 <code>Retry-After</code> 重试（约 3 秒）</td></tr>
+    <tr><td>410</td><td>结果过期或不可用，停止重试</td></tr>
+  </table>
+  <ul>
+    <li>只在 <code>status=completed</code>（或统一任务接口的 <code>succeeded</code>）后下载；<code>failed</code> 时读取 error 并停止，错误 JSON 不要保存为成品</li>
+    <li>支持 <code>HEAD</code> 与 <code>Range</code> 断点续传；下载可能返回媒体或 302，跟随即可，跨站重定向不会转发你的令牌</li>
+  </ul>
+
+  <h2 id="billing">14. 计费规则</h2>
+  <p>视频模型按<b>秒</b>计费，档位由请求参数决定（优先读 <code>resolution</code>，其次按 <code>size</code> 映射）：</p>
+  <table>
+    <tr><th>档位</th><th>单价（配额/秒）</th><th>对应参数</th></tr>
+    <tr><td>480P</td><td>0.45</td><td><code>resolution:480P</code></td></tr>
+    <tr><td>720P</td><td>0.9</td><td><code>resolution:720P</code> 或 size 1280x720 / 720x1280</td></tr>
+    <tr><td>1080P</td><td>1.8</td><td><code>resolution:1080P</code> 或 size 1792x1024 / 1024x1792</td></tr>
+  </table>
+  <p>扣费 = 时长 × 档位单价 × 额度单价(500000) × 分组倍率。
+  <b>建议始终显式传 resolution 或 size</b>：不传时按 720P 预扣，若实际生成档位更高会与预扣不一致。
+  共享车按任务预扣：钱包和 Key 额度均需充足；取消或失败的费用以任务 <code>refunded</code> 和账单为准。</p>
+
+  <h2 id="errors">15. 错误处理与错误码</h2>
+  <h3>错误字段读取顺序</h3>
+  <table>
+    <tr><th>返回位置</th><th>含义</th></tr>
+    <tr><td>非 2xx 响应的 <code>error</code></td><td>本次接口请求未成功：读 <code>code</code>、<code>reason_code</code>、<code>message</code>；可定位字段时带 <code>param</code>，公共错误带 <code>request_id</code></td></tr>
+    <tr><td>任务 <code>status=failed</code> 的 <code>error</code></td><td>任务失败/取消/投递拒绝：读 <code>code</code>、<code>reason_code</code>、<code>recommended_action</code></td></tr>
+  </table>
+  <p>查询返回 HTTP 200 只代表查询成功，不代表生成成功。<code>code</code> 用于兼容原有分类，<code>reason_code</code> 用于细分原因，<code>message</code> 用于展示；不要通过中文文案判断重试逻辑。
+  <code>param=media</code> 表示合并后的素材校验，可能来自 <code>input.media</code> 或 <code>parameters.media</code>。</p>
+
+  <h3>recommended_action 处理建议</h3>
+  <table>
+    <tr><th>值</th><th>调用方处理</th></tr>
+    <tr><td><code>revise_and_resubmit</code></td><td>确认原任务与费用状态后，修正参数由用户决定是否重建；不自动重提</td></tr>
+    <tr><td><code>contact_admin</code></td><td>提供任务 ID 与 request_id，联系管理员</td></tr>
+    <tr><td><code>reconcile</code></td><td>按轮询建议核对原任务状态；不换 ID 重投</td></tr>
+    <tr><td><code>wait</code></td><td>仍在处理，按建议间隔等待</td></tr>
+    <tr><td><code>none</code></td><td>无需继续处理（如任务已取消）；按账单核对费用</td></tr>
+  </table>
+  <p>网络超时、HTTP 500/502、<code>status=unknown</code> 都<b>不能</b>作为任务未创建的证据，先查原 ID。费用以任务 <code>refunded</code> 和账单为准。</p>
+
+  <h3>HTTP 错误码</h3>
+  <table>
+    <tr><th>HTTP</th><th>error.code</th><th>含义与处理</th></tr>
+    <tr><td>400</td><td><code>invalid_request</code></td><td>参数校验失败，按 <code>param</code> 和 <code>reason_code</code> 修正；未知提交结果先查原 ID</td></tr>
+    <tr><td>400</td><td><code>invalid_request</code> / <code>price_required</code></td><td>共享车需填 <code>expected_price</code>，先查报价</td></tr>
+    <tr><td>409</td><td><code>price_changed</code></td><td>重新查报价并确认，先核对原 ID</td></tr>
+    <tr><td>409</td><td><code>idempotency_conflict</code></td><td>原 ID 已绑定不同请求，核对参数，不能换 ID 盲重投</td></tr>
+    <tr><td>403</td><td><code>insufficient_quota</code></td><td>核对钱包与令牌额度（调用方额度，非生成服务额度）</td></tr>
+    <tr><td>403</td><td><code>payment_required</code></td><td>结清待付费用</td></tr>
+    <tr><td>403</td><td><code>service_disabled</code></td><td>该车型服务关闭，联系管理员</td></tr>
+    <tr><td>403</td><td><code>model_not_allowed</code></td><td>核对令牌的模型访问权限</td></tr>
+    <tr><td>404</td><td><code>not_found</code></td><td>核对 ID / 车型 / 所属用户</td></tr>
+    <tr><td>429</td><td><code>rate_limit_exceeded</code></td><td>按 Retry-After 等待，合并同账户查询</td></tr>
+    <tr><td>410</td><td><code>content_unavailable</code></td><td>结果过期或不可用，停止下载重试</td></tr>
+    <tr><td>502</td><td><code>service_unavailable</code></td><td>按 reason_code 与 recommended_action 处理；不仅凭 502 推断是否已建单</td></tr>
+    <tr><td>500</td><td><code>fleet_error</code></td><td>保存 request_id 并核对原 ID，勿换 ID 重复提交</td></tr>
+  </table>
+
+  <details>
+    <summary>常见 400 校验原因码（error.reason_code，点击展开）</summary>
+    <table>
+      <tr><th>原因码</th><th>含义与处理</th></tr>
+      <tr><td><code>invalid_request_structure</code> / <code>invalid_request_parameters</code></td><td>请求结构、字段类型或取值无效，按参数表核对</td></tr>
+      <tr><td><code>invalid_duration</code> / <code>invalid_seconds</code></td><td>时长使用 2–30 秒整数</td></tr>
+      <tr><td><code>conflicting_duration_fields</code></td><td>不同时传 seconds 与 duration</td></tr>
+      <tr><td><code>unsupported_resolution</code> / <code>unsupported_ratio</code> / <code>invalid_size</code></td><td>按支持的分辨率、比例或尺寸填写</td></tr>
+      <tr><td><code>conflicting_size_fields</code></td><td>不同时传 size 与 resolution／ratio</td></tr>
+      <tr><td><code>invalid_prompt</code> / <code>prompt_too_long</code> / <code>invalid_title</code></td><td>核对提示词／标题类型与长度；提示词和素材至少一项</td></tr>
+      <tr><td><code>invalid_audio</code> / <code>invalid_hue</code> / <code>invalid_prompt_extend</code></td><td>核对声音布尔值、hue 范围与提示词处理枚举</td></tr>
+      <tr><td><code>invalid_parameter_object</code> / <code>invalid_media_array</code> / <code>invalid_media_item</code></td><td>parameters/metadata 用对象，素材用对象数组</td></tr>
+      <tr><td><code>unsupported_request_field</code> / <code>duplicate_request_parameter</code> / <code>duplicate_form_field</code></td><td>删除未支持或重复的字段</td></tr>
+      <tr><td><code>unsupported_mode</code> / <code>mode_media_mismatch</code> / <code>missing_reference_media</code></td><td>按生成模式提供匹配的素材数量与用途</td></tr>
+      <tr><td><code>missing_first_frame</code> / <code>conflicting_media_roles</code> / <code>invalid_frame_media_type</code> / <code>invalid_media_role</code></td><td>首尾帧用图片；尾帧不能单独使用；首尾帧不与参考素材混用</td></tr>
+      <tr><td><code>too_many_media</code> / <code>media_count_limit_exceeded</code></td><td>核对总素材数与各类型数量</td></tr>
+      <tr><td><code>invalid_media_duration</code> / <code>media_duration_limit_exceeded</code></td><td>音视频单段／累计时长；图片不传时长</td></tr>
+      <tr><td><code>invalid_media_url</code> / <code>private_media_url</code></td><td>素材用无需登录的公开 HTTP(S) 地址</td></tr>
+      <tr><td><code>media_upload_required</code> / <code>missing_media_id</code></td><td>先上传素材取得有效 ID</td></tr>
+      <tr><td><code>media_car_mismatch</code> / <code>media_not_ready_or_car_mismatch</code></td><td>核对素材所有者与处理状态，必要时重传</td></tr>
+      <tr><td><code>media_type_mismatch</code> / <code>missing_media_duration</code> / <code>media_duration_mismatch</code></td><td>使用实际文件类型与上传返回的时长</td></tr>
+      <tr><td><code>invalid_media_size</code> / <code>upload_file_too_large</code></td><td>核对文件完整性与大小限制</td></tr>
+      <tr><td><code>unsupported_image_format</code> / <code>unsupported_video_format</code> / <code>unsupported_audio_format</code></td><td>按素材表使用支持的类型与格式</td></tr>
+      <tr><td><code>conflicting_reference_fields</code> / <code>invalid_input_reference</code></td><td>核对兼容入口 input_reference，避免重复提供</td></tr>
+      <tr><td><code>shared_car_not_configured</code> / <code>invalid_fleet_price</code></td><td>共享车配置或价格异常，联系管理员</td></tr>
+      <tr><td><code>video_output_duration_unsupported</code></td><td>该分辨率不支持本次时长（wan3.0-video-prime：720P 仅 10 秒、1080P 至少 8 秒），请调整时长</td></tr>
+    </table>
+  </details>
+
+  <details>
+    <summary>已建单任务失败分类（status=failed 时的 reason_code，点击展开）</summary>
+    <table>
+      <tr><th>reason_code</th><th>含义</th><th>建议</th></tr>
+      <tr><td><code>input_text_policy_violation</code> 等输入审核码</td><td>输入文字／图片／视频／音频未通过审核</td><td><code>revise_and_resubmit</code></td></tr>
+      <tr><td><code>output_image_policy_violation</code> 等输出审核码</td><td>生成内容未通过审核</td><td><code>revise_and_resubmit</code></td></tr>
+      <tr><td><code>upstream_quota_exhausted</code></td><td>生成服务额度不足（不等于钱包额度）</td><td><code>contact_admin</code></td></tr>
+      <tr><td><code>upstream_authentication_failed</code> / <code>upstream_permission_denied</code></td><td>生成服务认证或权限异常</td><td><code>contact_admin</code></td></tr>
+      <tr><td><code>generation_result_unknown</code> / <code>task_query_failed</code></td><td>结果或查询仍需核对</td><td><code>reconcile</code></td></tr>
+      <tr><td><code>task_submission_rejected</code></td><td>已确认提交被拒绝，原因未知</td><td><code>contact_admin</code></td></tr>
+      <tr><td><code>task_cancelled</code></td><td>任务已取消</td><td><code>none</code></td></tr>
+      <tr><td><code>task_replaced</code></td><td>原任务已被修正替换（仅 code/message）</td><td>停止轮询旧任务</td></tr>
+    </table>
+  </details>
+
+  <details>
+    <summary>全局业务错误码（按类别，点击展开）</summary>
+    <p>以下是平台统一定义的全局业务错误码，各模型共用同一套错误含义。按响应中的业务 <code>code</code> 查表；HTTP 状态码与业务错误码不是一一对应。任务查询即使返回 HTTP 200，也需要检查任务 <code>status</code>。</p>
+    <h3>请求参数与参考素材</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>reference_asset_classification_unconfirmed</code></td><td>参考素材类型待确认，视频尚未提交，联系平台支持检查素材分类</td></tr>
+      <tr><td><code>reference_asset_combination_unsupported</code></td><td>当前模型不支持人物资产与参考视频、音频或首尾帧组合，请调整参考素材</td></tr>
+      <tr><td><code>reference_asset_order_unconfirmed</code></td><td>普通图片与人物资产编号规则无法确认，请检查引用方式</td></tr>
+      <tr><td><code>reference_asset_position_invalid</code></td><td>人物资产对应的参考图位置缺失、重复或越界，请重新发起任务</td></tr>
+      <tr><td><code>reference_asset_limit_exceeded</code></td><td>参考图片数量超限，请减少图片后重新生成</td></tr>
+      <tr><td><code>reference_asset_rejected</code></td><td>人物资产审核或提交失败，请更换素材或联系管理员</td></tr>
+      <tr><td><code>reference_asset_not_found</code></td><td>人物资产不存在、已失效或无权访问，勿重复创建</td></tr>
+      <tr><td><code>invalid_request</code></td><td>生成参数不符合模型要求，请检查输入、尺寸和时长</td></tr>
+      <tr><td><code>reference_media_invalid</code></td><td>参考素材不符合模型要求，请检查格式、数量、尺寸和时长</td></tr>
+      <tr><td><code>reference_media_download_failed</code></td><td>平台无法读取参考素材，请检查素材可访问性或重新上传</td></tr>
+      <tr><td><code>reference_media_duration_exceeded</code></td><td>参考音频或视频时长不符合要求，请调整后重新生成</td></tr>
+      <tr><td><code>reference_image_dimensions_invalid</code></td><td>参考图片尺寸不符合要求</td></tr>
+      <tr><td><code>reference_media_too_large</code></td><td>参考素材超过大小限制，请压缩或更换</td></tr>
+      <tr><td><code>real_person_mode_required</code></td><td>当前参考素材需要真人模式，请检查模型设置</td></tr>
+      <tr><td><code>reference_media_import_failed</code></td><td>平台无法导入参考素材，请检查或重新上传</td></tr>
+      <tr><td><code>missing_model</code></td><td>请选择生成模型后再提交</td></tr>
+      <tr><td><code>model_not_found</code></td><td>所选模型不可用，请选择其他模型</td></tr>
+      <tr><td><code>invalid_json</code> / <code>invalid_multipart_form</code> / <code>unsupported_content_type</code></td><td>请求数据或上传格式有误，请检查后重新提交</td></tr>
+      <tr><td><code>invalid_action</code></td><td>当前模型不支持此操作</td></tr>
+      <tr><td><code>prompt_empty</code></td><td>请输入提示词后再提交</td></tr>
+      <tr><td><code>media_video_duration_invalid</code> / <code>media_video_total_duration_exceeded</code> / <code>media_video_duration_unknown</code> / <code>media_video_count_exceeded</code> / <code>media_video_source_required</code></td><td>参考视频时长／数量／来源不符合要求，按提示调整素材</td></tr>
+      <tr><td><code>media_constraints_invalid</code></td><td>模型媒体约束配置无效，联系平台支持</td></tr>
+      <tr><td><code>video_edit_requires_auto_duration</code></td><td>视频编辑需要使用自动时长</td></tr>
+      <tr><td><code>reference_asset_processing</code></td><td>人物资产仍在审核，请稍后检查资产状态并重试</td></tr>
+    </table>
+    <h3>内容审核、版权与隐私</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>input_text_policy_violation</code> / <code>input_image_policy_violation</code> / <code>input_video_policy_violation</code> / <code>input_audio_policy_violation</code> / <code>input_content_policy_violation</code> / <code>input_prompt_policy_violation</code></td><td>输入内容未通过平台审核，请调整后重新生成</td></tr>
+      <tr><td><code>output_text_policy_violation</code> / <code>output_image_policy_violation</code> / <code>output_video_policy_violation</code> / <code>output_audio_policy_violation</code> / <code>output_content_policy_violation</code></td><td>生成内容未通过平台审核，请调整提示词或参考素材后重新生成</td></tr>
+      <tr><td><code>content_moderation_failed</code></td><td>内容审核未通过，未说明具体对象</td></tr>
+      <tr><td><code>input_copyright_violation</code> / <code>output_copyright_violation</code> / <code>content_copyright_violation</code></td><td>内容被版权检查拦截，请更换提示词或素材</td></tr>
+      <tr><td><code>reference_image_portrait_rejected</code> / <code>reference_video_portrait_rejected</code> / <code>reference_media_privacy_rejected</code></td><td>参考素材未通过人像／隐私检查，请更换素材</td></tr>
+    </table>
+    <h3>账户额度与预扣</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>insufficient_user_quota</code></td><td>当前账户可用额度不足，请检查余额后再提交</td></tr>
+      <tr><td><code>pre_consume_token_quota_failed</code></td><td>无法预留调用额度，请检查可用额度或联系管理员</td></tr>
+    </table>
+    <h3>模型与服务配置</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>reference_asset_provider_unavailable</code> / <code>reference_asset_source_unconfirmed</code> / <code>reference_asset_preparation_failed</code> / <code>reference_asset_route_unavailable</code></td><td>人物资产审核服务配置或运行异常，联系平台支持</td></tr>
+      <tr><td><code>reference_asset_transport_changed</code></td><td>当前任务使用旧版素材传输协议，请用当前模型配置重新发起</td></tr>
+      <tr><td><code>model_price_error</code></td><td>模型计价配置缺失或无效，联系平台支持</td></tr>
+    </table>
+    <h3>平台生成服务</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>upstream_quota_exhausted</code> / <code>upstream_balance_unavailable</code> / <code>upstream_resource_limited</code></td><td>生成服务额度或资源受限，请稍后再试或联系管理员</td></tr>
+      <tr><td><code>upstream_authentication_failed</code> / <code>upstream_permission_denied</code> / <code>upstream_not_found</code> / <code>upstream_route_unavailable</code></td><td>生成服务认证、权限或线路异常，请联系平台支持或换模型</td></tr>
+      <tr><td><code>rate_limit_exceeded</code></td><td>请求频率达到上限，请稍后重试</td></tr>
+      <tr><td><code>generation_empty_response</code> / <code>generation_unavailable</code> / <code>generation_rejected</code> / <code>generation_response_invalid</code></td><td>生成响应异常或被拒，请先查看原任务状态</td></tr>
+      <tr><td><code>audio_generation_contract_missing</code> / <code>audio_generation_contract_unsupported</code> / <code>model_contract_unsupported</code> / <code>audio_input_invalid</code> / <code>audio_parameter_unsupported</code> / <code>audio_reference_limit_exceeded</code> / <code>audio_reference_invalid</code> / <code>audio_format_unsupported</code></td><td>音频模型协议、参数或素材不符合要求，按提示调整</td></tr>
+    </table>
+    <h3>连接、超时与服务负载</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>reference_asset_account_unavailable</code> / <code>reference_asset_gateway_overloaded</code> / <code>reference_asset_preparation_timeout</code></td><td>人物素材校验暂不可用或超时，请稍后重试</td></tr>
+      <tr><td><code>generation_timeout</code> / <code>generation_connection_failed</code> / <code>generation_dns_failed</code> / <code>generation_tls_failed</code></td><td>生成响应超时或连接中断，请先确认原任务结果，避免重复提交</td></tr>
+    </table>
+    <h3>任务查询</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>task_query_timeout</code> / <code>task_query_connection_failed</code> / <code>task_query_dns_failed</code> / <code>task_query_tls_failed</code></td><td>任务状态查询异常，请稍后重新查询，勿重复生成</td></tr>
+      <tr><td><code>task_not_exist</code> / <code>task_origin_not_exist</code></td><td>任务暂不可查，请确认任务 ID 后重新查询</td></tr>
+    </table>
+    <h3>生成产物</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>artifact_not_found</code> / <code>artifact_not_ready</code> / <code>artifact_delivery_unavailable</code> / <code>image_artifact_unavailable</code></td><td>产物不可用或准备中，请稍后查看或联系平台支持</td></tr>
+    </table>
+    <h3>请求与任务取消</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>task_cancelled</code></td><td>任务已取消，计费结果查看任务账单</td></tr>
+      <tr><td><code>request_cancelled</code></td><td>请求已取消；如已提交生成，请先确认原任务结果</td></tr>
+    </table>
+    <h3>未明确分类的失败</h3>
+    <table>
+      <tr><th>错误码</th><th>说明与处理</th></tr>
+      <tr><td><code>reference_asset_result_unknown</code> / <code>generation_failure_reason_missing</code> / <code>generation_failure_unclassified</code></td><td>失败原因待确认或未识别，请提供任务 ID 由平台支持排查</td></tr>
+    </table>
+    <h3>重试与排查</h3>
+    <ul>
+      <li>参数、素材、审核、权限或额度问题，按对应错误说明处理后再提交；原样连续重试通常无效</li>
+      <li>任务查询或产物读取失败，保留原任务 ID，只重试查询或下载，不重新生成</li>
+      <li>生成提交超时或连接中断，先确认原任务是否已受理；重试时遵守 <code>Retry-After</code> 并设置等待上限</li>
+      <li>错误码不代表允许自动重发，也不代表必定未扣费或已退款；计费结果以任务账单和结算状态为准</li>
+      <li>遇到目录外错误、空错误码或无法解析的响应，保留 HTTP 状态、脱敏错误摘要、模型 ID、调用时间、任务 ID 及 <code>request_id</code> 联系管理员；不要提供完整 API Key、鉴权头或私密素材链接</li>
+    </ul>
+  </details>
+
+  <h2 id="tips">16. 注意事项</h2>
+  <ul>
+    <li><b>Idempotency-Key</b>：每次新建任务用新的 UUID；同一 key 重复请求不会重复建单，超时重试时复用它</li>
+    <li><b>共享车重试</b>：网络异常先查询原任务；重试必须用相同的 UUID 与参数，不要换 ID 重投</li>
+    <li><b>SDK Base URL</b>：填完整 <code>http://39.107.108.35:3000/v1</code>；自动追加 /v1 的渠道配置只填域名</li>
+    <li><b>素材过期</b>：签名直链约 15 分钟有效，下载一律走本站 <code>/content</code> 接口</li>
+    <li><b>素材绑定</b>：共享车素材只能在同一渠道使用；本站已做渠道绑定校验，跨渠道引用直接报 <code>material_channel_mismatch</code></li>
+    <li><b>协议切换</b>：复用原请求键切换协议可能返回幂等冲突，先查询原任务</li>
+  </ul>
+
+  <p class="sub">© 本站网关 · 基于上游 td.video.v1 / OpenAI 兼容协议整理</p>
+</div>
+</body>
+</html>
