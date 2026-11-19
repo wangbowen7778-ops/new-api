@@ -52,3 +52,7 @@ new-api-local/
 
 # agent workspace memory (contains local infra notes)
 .workbuddy/
+
+# local build artifacts
+new-api-linux
+.tmpbuild/
