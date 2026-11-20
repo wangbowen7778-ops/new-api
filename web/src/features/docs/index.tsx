@@ -206,6 +206,18 @@ export function DocsPage() {
 
   const renderSidebar = (): ReactNode => (
     <aside className='bg-card/50 border-border/70 top-20 hidden h-fit max-h-[calc(100vh-6rem)] w-60 shrink-0 overflow-y-auto rounded-xl border p-3 pr-2 shadow-sm lg:sticky lg:block'>
+      <div className='border-border/60 mb-3 border-b pb-3'>
+        <p className='text-muted-foreground mb-2 px-3 text-xs font-semibold tracking-widest uppercase'>
+          {t('Video Access')}
+        </p>
+        <a
+          href='/developer-docs'
+          className='-ml-px flex items-center justify-between border-l-2 border-transparent px-3 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground'
+        >
+          <span>wan3</span>
+          <span className='text-[11px]'>→</span>
+        </a>
+      </div>
       <p className='text-muted-foreground mb-3 px-3 text-xs font-semibold tracking-widest uppercase'>
         {t('Table of Contents')}
       </p>
@@ -286,24 +298,6 @@ export function DocsPage() {
       >
         {renderSidebar()}
         <div className='min-w-0 flex-1'>
-          <a
-            href='/developer-docs'
-            className='border-primary/30 bg-primary/5 hover:bg-primary/10 mb-4 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 transition-colors'
-          >
-            <span className='min-w-0'>
-              <span className='block text-sm font-semibold'>
-                {t('wan3 Video Integration')}
-              </span>
-              <span className='text-muted-foreground block truncate text-xs'>
-                {t(
-                  'Video, image and audio generation · dual-protocol access guide'
-                )}
-              </span>
-            </span>
-            <span className='text-primary shrink-0 text-sm'>
-              {t('View')} →
-            </span>
-          </a>
           <div
             ref={contentRef}
             onClick={handleContainerClick}

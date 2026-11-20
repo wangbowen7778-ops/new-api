@@ -7804,7 +7804,6 @@
     "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "Сопоставьте ключевые слова ошибок 429 апстрима со стратегией. action: retry (охлаждение, затем переключение), retry_no_cooldown (немедленное переключение, без охлаждения), cooldown_only (быстрый отказ) или wait_retry (ожидание на том же канале для retry_after апстрима, ограничено wait_max_seconds). Несопоставленные 429 сохраняют встроенное охлаждение 3-60 с.",
     "Channel 429 policies must be a JSON array": "Политики 429 каналов должны быть массивом JSON",
     "Channel 429 policies must be valid JSON": "Политики 429 каналов должны быть корректным JSON",
-    "wan3 Video Integration": "Интеграция видео wan3",
-    "Video, image and audio generation · dual-protocol access guide": "Генерация видео, изображений и аудио · руководство по двум протоколам"
+    "Video Access": "Доступ к видео"
   }
 }

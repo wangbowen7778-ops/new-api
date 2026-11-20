@@ -7804,7 +7804,6 @@
     "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "Ánh xạ từ khóa lỗi 429 của thượng nguồn sang chiến lược. action: retry (hồi rồi chuyển kênh), retry_no_cooldown (chuyển ngay, không hồi), cooldown_only (thất bại nhanh) hoặc wait_retry (chờ trên cùng kênh cho retry_after của thượng nguồn, giới hạn bởi wait_max_seconds). 429 không khớp giữ hồi thử lại mặc định 3s-60s.",
     "Channel 429 policies must be a JSON array": "Chính sách 429 kênh phải là mảng JSON",
     "Channel 429 policies must be valid JSON": "Chính sách 429 kênh phải là JSON hợp lệ",
-    "wan3 Video Integration": "Tích hợp video wan3",
-    "Video, image and audio generation · dual-protocol access guide": "Tạo video, hình ảnh và âm thanh · hướng dẫn truy cập hai giao thức"
+    "Video Access": "Truy cập video"
   }
 }
