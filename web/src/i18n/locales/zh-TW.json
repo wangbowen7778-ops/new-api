@@ -7911,6 +7911,8 @@
     "OpenAI, Claude and Gemini compatible routes work out of the box, no migration needed.": "OpenAI、Claude、Gemini 兼容路由开箱即用，无需迁移。",
     "As low as 10% of official prices": "低至官方价格 1 折",
     "Per-model pricing is configured in the console and always matches the pricing page.": "按模型定价在控制台配置，与定价页面始终一致。",
-    "New API · AI Gateway": "New API · AI 网关"
+    "New API · AI Gateway": "New API · AI 网关",
+    "wan3 Video Integration": "wan3 視頻接入",
+    "Video, image and audio generation · dual-protocol access guide": "視頻 / 圖片 / 音頻生成與素材 · 雙協議接入文檔"
   }
 }

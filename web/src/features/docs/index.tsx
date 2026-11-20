@@ -286,6 +286,24 @@ export function DocsPage() {
       >
         {renderSidebar()}
         <div className='min-w-0 flex-1'>
+          <a
+            href='/developer-docs'
+            className='border-primary/30 bg-primary/5 hover:bg-primary/10 mb-4 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 transition-colors'
+          >
+            <span className='min-w-0'>
+              <span className='block text-sm font-semibold'>
+                {t('wan3 Video Integration')}
+              </span>
+              <span className='text-muted-foreground block truncate text-xs'>
+                {t(
+                  'Video, image and audio generation · dual-protocol access guide'
+                )}
+              </span>
+            </span>
+            <span className='text-primary shrink-0 text-sm'>
+              {t('View')} →
+            </span>
+          </a>
           <div
             ref={contentRef}
             onClick={handleContainerClick}

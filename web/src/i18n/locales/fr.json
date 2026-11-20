@@ -7803,6 +7803,8 @@
     "Channel 429 Policies": "Politiques 429 des canaux",
     "Map upstream 429 error keywords to a strategy. action: retry (cooldown then switch channel), retry_no_cooldown (switch channel immediately, no cooldown), cooldown_only (fail fast) or wait_retry (sleep on the same channel for the upstream retry-after, capped by wait_max_seconds). Unmatched 429s keep the built-in 3s-60s retry cooldown.": "Mappez les mots-clés d'erreur 429 en amont vers une stratégie. action : retry (cooldown puis changement de canal), retry_no_cooldown (changement immédiat, sans cooldown), cooldown_only (échec rapide) ou wait_retry (attente sur le même canal pour le retry-after amont, plafonné par wait_max_seconds). Les 429 non correspondants conservent le cooldown de réessai intégré de 3s à 60s.",
     "Channel 429 policies must be a JSON array": "Les politiques 429 des canaux doivent être un tableau JSON",
-    "Channel 429 policies must be valid JSON": "Les politiques 429 des canaux doivent être un JSON valide"
+    "Channel 429 policies must be valid JSON": "Les politiques 429 des canaux doivent être un JSON valide",
+    "wan3 Video Integration": "Intégration vidéo wan3",
+    "Video, image and audio generation · dual-protocol access guide": "Génération vidéo, image et audio · guide d'accès double protocole"
   }
 }
