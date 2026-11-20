@@ -47,6 +47,12 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 			logContent = append(logContent, common.NewMessage("Billing parameters: {{params}}", map[string]any{"params": strings.Join(contents, ", ")}))
 		}
 	}
+	// 参考视频时长单独成句：提交日志里能直接看到这次请求带了多少秒输入视频。
+	if snap := info.TieredBillingSnapshot; snap != nil {
+		if input, ok := snap.UsageFacts["input_video_seconds"].(float64); ok && input > 0 {
+			logContent = append(logContent, common.NewMessage("Reference video: {{seconds}}s", map[string]any{"seconds": math.Round(input*100) / 100}))
+		}
+	}
 	other := model.NewLogOther()
 	other.SetPublic("is_task", true)
 	other.SetPublic("request_path", c.Request.URL.Path)

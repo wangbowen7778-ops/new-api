@@ -49,10 +49,11 @@ go.work.sum
 *.tar
 mock/
 new-api-local/
+new-api-linux
+.tmpbuild/
 
 # agent workspace memory (contains local infra notes)
 .workbuddy/
 
-# local build artifacts
-new-api-linux
-.tmpbuild/
+# 本地定制网关的私有内容
+_deploy/

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "/tmp/tsconfig.agent.tsbuildinfo"
+  },
+  "include": [
+    "src/env.d.ts",
+    "src/test-setup.ts",
+    "src/features/usage-logs/types.ts",
+    "src/features/usage-logs/lib/task-detail.ts",
+    "src/features/usage-logs/components/task-detail-fields.tsx",
+    "src/features/usage-logs/components/task-detail-summary.tsx",
+    "src/features/usage-logs/components/task-cost-breakdown.tsx",
+    "src/features/usage-logs/components/task-artifacts.tsx",
+    "src/features/usage-logs/components/dialogs/task-details-dialog.tsx",
+    "src/features/usage-logs/components/__tests__/task-artifacts-cell.test.tsx"
+  ]
+}

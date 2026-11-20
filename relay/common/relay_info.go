@@ -1056,16 +1056,28 @@ type TaskRelayInfo struct {
 }
 
 type TaskSubmitReq struct {
-	Prompt         string         `json:"prompt"`
-	Model          string         `json:"model,omitempty"`
-	Mode           string         `json:"mode,omitempty"`
-	Image          string         `json:"image,omitempty"`
-	Images         []string       `json:"images,omitempty"`
-	Size           string         `json:"size,omitempty"`
-	Duration       int            `json:"duration,omitempty"`
-	Seconds        string         `json:"seconds,omitempty"`
-	InputReference string         `json:"input_reference,omitempty"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
+	Prompt         string           `json:"prompt"`
+	Model          string           `json:"model,omitempty"`
+	Mode           string           `json:"mode,omitempty"`
+	Image          string           `json:"image,omitempty"`
+	Images         []string         `json:"images,omitempty"`
+	Size           string           `json:"size,omitempty"`
+	Duration       int              `json:"duration,omitempty"`
+	Seconds        string           `json:"seconds,omitempty"`
+	InputReference string           `json:"input_reference,omitempty"`
+	Metadata       map[string]any   `json:"metadata,omitempty"`
+	Input          *TaskSubmitInput `json:"input,omitempty"`
+}
+
+// TaskSubmitInput 只解析动作推导需要的参考素材声明，各厂商的其余输入字段
+// 仍由插件自行处理。
+type TaskSubmitInput struct {
+	Media []TaskSubmitMedia `json:"media,omitempty"`
+}
+
+type TaskSubmitMedia struct {
+	Type string `json:"type,omitempty"`
+	URL  string `json:"url,omitempty"`
 }
 
 func (t *TaskSubmitReq) GetPrompt() string {
@@ -1081,6 +1093,8 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		Metadata json.RawMessage `json:"metadata,omitempty"`
 		Duration json.RawMessage `json:"duration,omitempty"`
+		Seconds  json.RawMessage `json:"seconds,omitempty"`
+		Images   json.RawMessage `json:"images,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(t),
@@ -1100,6 +1114,33 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 				if v, err := strconv.Atoi(durationStr); err == nil {
 					t.Duration = v
 				}
+			}
+		}
+	}
+
+	// seconds 在 OpenAI 视频协议里是字符串，但大量客户端直接发数字，
+	// 严格按 string 解析会 400。两种写法都接受，内部统一存成字符串。
+	if len(aux.Seconds) > 0 {
+		var secondsStr string
+		if err := common.Unmarshal(aux.Seconds, &secondsStr); err == nil {
+			t.Seconds = secondsStr
+		} else {
+			var secondsNum float64
+			if err := common.Unmarshal(aux.Seconds, &secondsNum); err == nil {
+				t.Seconds = strconv.FormatFloat(secondsNum, 'f', -1, 64)
+			}
+		}
+	}
+
+	// images 同理：单张图可能被写成字符串，按 []string 解析会 400。
+	if len(aux.Images) > 0 {
+		var images []string
+		if err := common.Unmarshal(aux.Images, &images); err == nil {
+			t.Images = images
+		} else {
+			var single string
+			if err := common.Unmarshal(aux.Images, &single); err == nil && single != "" {
+				t.Images = []string{single}
 			}
 		}
 	}

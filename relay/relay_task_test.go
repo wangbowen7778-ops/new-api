@@ -190,6 +190,52 @@ func TestTaskModel2DtoNormalizesLegacyAction(t *testing.T) {
 	assert.Equal(t, "firstTailGenerate", task.Action)
 }
 
+func TestTaskModel2DtoExposesRequestSnapshotAndBillingFacts(t *testing.T) {
+	task := &model.Task{
+		TaskID: "task_snapshot",
+		Quota:  780000,
+		PrivateData: model.TaskPrivateData{
+			RequestSnapshot: &model.TaskRequestSnapshot{
+				Source:     "/v1/videos",
+				Model:      "wan3.0-video",
+				Prompt:     "flowers",
+				Parameters: map[string]any{"resolution": "480P"},
+				Media: []model.TaskRequestMedia{
+					{
+						Type:            "reference_video",
+						Kind:            "video",
+						URL:             "https://cdn.example/ref.mp4",
+						DurationSeconds: 5,
+					},
+				},
+			},
+			BillingContext: &model.TaskBillingContext{
+				PreConsumedQuota: 900000,
+				TieredSnapshot: &billingexpr.BillingSnapshot{
+					EstimatedTier: "480P",
+					UsageFacts: map[string]any{
+						"seconds":             float64(10),
+						"input_video_seconds": float64(5),
+						"output_seconds":      float64(5),
+					},
+				},
+			},
+		},
+	}
+
+	dtoTask := TaskModel2Dto(task)
+
+	require.NotNil(t, dtoTask.Request)
+	assert.Equal(t, "/v1/videos", dtoTask.Request.Source)
+	assert.Equal(t, "flowers", dtoTask.Request.Prompt)
+	require.Len(t, dtoTask.Request.Media, 1)
+	assert.Equal(t, 5.0, dtoTask.Request.Media[0].DurationSeconds)
+	require.NotNil(t, dtoTask.Billing)
+	assert.Equal(t, 900000, dtoTask.Billing.PreConsumedQuota)
+	assert.Equal(t, "480P", dtoTask.Billing.MatchedTier)
+	assert.Equal(t, float64(5), dtoTask.Billing.UsageFacts["input_video_seconds"])
+}
+
 const mappingOrderSubmitPlugin = `
 export const meta = {apiVersion:1,key:"maporder",name:"Map Order",version:"1.0.0",author:{name:"Test"},models:["declared-model"],fetchMode:"per_task"};
 export function buildSubmitRequest(ctx) {

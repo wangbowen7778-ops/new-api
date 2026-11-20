@@ -17,11 +17,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, test } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, test, vi } from 'vitest'
 
 import type { TaskLog } from '../../types'
 import { TaskArtifactsCell } from '../task-artifacts'
+
+vi.mock('../../api', () => ({
+  getTaskArtifacts: vi.fn().mockResolvedValue({
+    artifacts: [
+      {
+        key: 'video',
+        type: 'video',
+        content_url: 'https://cdn.example/result.mp4',
+      },
+    ],
+    legacyContentUrl: undefined,
+    legacyAudioClips: [],
+  }),
+}))
 
 function taskLog(overrides: Partial<TaskLog> = {}): TaskLog {
   return {
@@ -82,5 +96,70 @@ describe('task artifacts cell', () => {
     expect(
       screen.queryByRole('button', { name: /Artifacts/ })
     ).not.toBeInTheDocument()
+  })
+
+  test('given a settled video task, the artifacts dialog shows request media and the cost split', async () => {
+    renderCell(
+      taskLog({
+        quota: 780000,
+        request: {
+          source: '/v1/videos',
+          model: 'wan3.0-video',
+          prompt: 'flowers in the breeze',
+          parameters: { resolution: '480P', ratio: '9:16' },
+          media: [
+            {
+              type: 'reference_video',
+              kind: 'video',
+              url: 'https://cdn.example/ref.mp4',
+              duration_seconds: 5,
+            },
+            {
+              type: 'reference_image',
+              kind: 'image',
+              url: 'https://cdn.example/frame.png',
+            },
+          ],
+        },
+        billing: {
+          pre_consumed_quota: 2025000,
+          usage_facts: {
+            seconds: 10,
+            input_video_seconds: 5,
+            output_seconds: 5,
+          },
+        },
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Artifacts/ }))
+
+    expect(
+      await screen.findByText(/Reference Materials \(2\)/)
+    ).toBeVisible()
+    expect(screen.getByText('flowers in the breeze')).toBeVisible()
+    expect(screen.getByText('Input Video')).toBeVisible()
+    expect(screen.getByText('Output Video')).toBeVisible()
+    expect(screen.getByText('Charged Amount')).toBeVisible()
+    expect(screen.getByText('Settled')).toBeVisible()
+    expect(screen.getAllByText(/5 seconds/).length).toBeGreaterThan(0)
+  })
+
+  test('given a task without a request snapshot, the prompt falls back to the upstream body', async () => {
+    renderCell(
+      taskLog({
+        data: {
+          output: { orig_prompt: 'a red cube rotates slowly' },
+          usage: { duration: 2, output_video_duration: 2, SR: 480 },
+        },
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Artifacts/ }))
+
+    expect(
+      await screen.findByText('a red cube rotates slowly')
+    ).toBeVisible()
+    expect(screen.queryByText(/Reference Materials/)).not.toBeInTheDocument()
   })
 })

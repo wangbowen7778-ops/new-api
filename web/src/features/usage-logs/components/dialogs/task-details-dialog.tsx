@@ -22,53 +22,14 @@ import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
-import { Label } from '@/components/ui/label'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
-import { cn } from '@/lib/utils'
 
 import { taskActionMapper, taskStatusMapper } from '../../lib/mappers'
 import { resolveTaskDetailAccess } from '../../lib/task-details'
 import type { TaskLog } from '../../types'
 import { PluginAuthorLink } from '../plugin-author-link'
-
-function DetailRow(props: {
-  label: React.ReactNode
-  value: React.ReactNode
-  mono?: boolean
-}) {
-  return (
-    <div className='grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-2 text-sm sm:grid-cols-[8rem_minmax(0,1fr)]'>
-      <span className='text-muted-foreground text-xs'>{props.label}</span>
-      <span
-        className={cn(
-          'min-w-0 text-xs break-all sm:wrap-break-word',
-          props.mono && 'font-mono'
-        )}
-      >
-        {props.value}
-      </span>
-    </div>
-  )
-}
-
-function DetailSection(props: {
-  label: string
-  icon?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <section className='min-w-0 space-y-1.5'>
-      <Label className='flex items-center gap-1.5 text-xs font-semibold'>
-        {props.icon}
-        {props.label}
-      </Label>
-      <div className='bg-muted/30 min-w-0 space-y-1.5 rounded-md border p-2.5'>
-        {props.children}
-      </div>
-    </section>
-  )
-}
+import { DetailRow, DetailSection } from '../task-detail-fields'
 
 function formatTaskTimestamp(value?: number): string {
   return value ? formatTimestampToDate(value, 'seconds') : '-'
